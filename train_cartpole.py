@@ -7,7 +7,7 @@ PROJECT_NAME = "cartpole"
 WANDB = True
 
 run_parameters = {
-    "model": "REINFORCE",
+    "model": "DQN",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
     "from_pixels": False
@@ -42,26 +42,30 @@ if run_parameters["model"] == "DQN":
 # Make ReinforceAgent.
 elif run_parameters["model"] == "REINFORCE":
     model_parameters = {
-        "lr": 1e-3,
+        "lr_pi": 1e-4,
+        "lr_V": 1e-3,
         "gamma": 0.99,
-        "baseline": "adv",
+        "baseline": "off"
     }   
     from agents.reinforce import *
     agent = ReinforceAgent(state_shape, env.action_space.n, model_parameters)
 
-# state, reward_sum = env.reset(), 0
-# for i in range(3):
-#     state = torch.from_numpy(state).float().unsqueeze(0)
-#     action = agent.act(state)        
-#     state, reward, done, _ = env.step(action.item())
-#     agent.ep_rewards.append(reward)
-# agent.update_on_episode()
+# Make A2CAgent.
+elif run_parameters["model"] == "A2C":
+    model_parameters = {
+        "lr_pi": 1e-4,
+        "lr_V": 1e-3,
+        "gamma": 0.99
+    }   
+    from agents.a2c import *
+    agent = A2CAgent(state_shape, env.action_space.n, model_parameters)
 
 # Initialise weights and biases monitoring.
 if WANDB: 
     wandb.init(project=PROJECT_NAME, config={**agent.P, **run_parameters})
     if run_parameters["model"] == "DQN": wandb.watch(agent.Q)
-    elif run_parameters["model"] == "REINFORCE": wandb.watch(agent.net)
+    elif run_parameters["model"] == "REINFORCE": wandb.watch(agent.pi)
+    elif run_parameters["model"] == "A2C": wandb.watch(agent.pi)
 
 # Run training loop.
 for ep in range(run_parameters["num_episodes"]):
@@ -88,26 +92,31 @@ for ep in range(run_parameters["num_episodes"]):
         # DQN updates on every timestep.
         if run_parameters["model"] == "DQN":
             agent.memory.add(state, action, next_state, torch.tensor([reward], device=agent.device))
-            loss = agent.update_on_batch()
+            value_loss = agent.update_on_batch()
         # REINFORCE requires us to store all rewards.
         elif run_parameters["model"] == "REINFORCE":
             agent.ep_rewards.append(reward)
+        # A2C updates on every timestep.
+        elif run_parameters["model"] == "A2C":
+            policy_loss, value_loss = agent.update_on_transition(next_state, torch.tensor([reward], device=agent.device))
         # ============================
 
         # Update tracking variables and terminate episode if done.
         reward_sum += reward; state = next_state
         if done: break
-    logs = {}
+    logs = {"reward": reward_sum}
 
     # ====== MODEL-SPECIFIC ======
-    # DQN has decaying epsilon to keep track of.
     if run_parameters["model"] == "DQN":
         logs["epsilon"] = agent.epsilon
-        logs["loss"] = loss; logs["reward"] = reward_sum
-    # REINFORCE updates at the end of each episode.
+        logs["value_loss"] = value_loss
     elif run_parameters["model"] == "REINFORCE":
-        loss, value_loss = agent.update_on_episode()
-        logs["loss"] = loss; logs["value_loss"] = value_loss; logs["reward"] = reward_sum
+        policy_loss, value_loss = agent.update_on_episode() # Update happens here.
+        logs["policy_loss"] = policy_loss
+        logs["value_loss"] = value_loss
+    elif run_parameters["model"] == "A2C": 
+        logs["policy_loss"] = policy_loss
+        logs["value_loss"] = value_loss
     # ============================
 
     # Log to weights and biases.  

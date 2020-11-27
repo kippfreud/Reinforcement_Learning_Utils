@@ -32,14 +32,13 @@ class DqnAgent:
         else:
             self.P = DEFAULT_HYPERPARAMETERS # Adopt defaults.
         # Create Q network.
-        if len(state_shape) > 1: preset = "CartPoleDQNPixels"
-        else: preset = "CartPoleDQNVector"
+        if len(state_shape) > 1: preset = "CartPoleQ_Pixels"
+        else: preset = "CartPoleQ_Vector"
         self.Q = SequentialNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)
         self.Q_target = SequentialNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
         self.Q_target.eval() # Turn off training mode for target net.
         self.num_actions = num_actions
-        # self.optimiser = optim.RMSprop(self.Q.parameters())
         self.optimiser = optim.Adam(self.Q.parameters(), lr=self.P["lr"])
         self.memory = ReplayMemory(self.P["replay_capacity"])
         self.epsilon = self.P["epsilon_start"]
@@ -83,7 +82,7 @@ class DqnAgent:
         self.optimiser.zero_grad() 
         # Compute loss. This is the Huber loss https://en.wikipedia.org/wiki/Huber_loss.
         loss = F.smooth_l1_loss(Q_values, Q_targets.unsqueeze(1))
-        # Run backprop using autograd engine and update parameters of self.Q.
+        # Run backprop using autograd engine and update parameters.
         loss.backward() 
         for param in self.Q.parameters():
             param.grad.data.clamp_(-1, 1) # NOTE: Does this implement reward clipping?

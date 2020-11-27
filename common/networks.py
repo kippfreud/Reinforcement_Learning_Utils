@@ -34,41 +34,8 @@ class MultiHeadedNetwork(nn.Module):
 
 def sequential_presets(name, state_shape, num_actions):
 
-    if name == "CartPoleDQNPixels":
-        # From https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html.
-        def conv2d_size_out(size, kernel_size=5, stride=2):
-            return (size - (kernel_size - 1) - 1) // stride  + 1
-        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[3])))
-        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[2])))
-        linear_input_size = convw * convh * 32
-        return [
-            nn.Conv2d(state_shape[1], 16, kernel_size=5, stride=2),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=5, stride=2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, kernel_size=5, stride=2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Flatten(),
-            nn.Linear(linear_input_size, num_actions)
-        ]
-
-    if name == "CartPoleDQNVector":
-        # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
-        return [
-            nn.Linear(state_shape[0], 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, num_actions)
-        ]
-
-    if name == "CartPoleReinforcePixels":
-        # Just added Softmax to DQN version.
+    if name == "CartPolePi_Pixels":
+        # Just added Softmax to Q version.
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - (kernel_size - 1) - 1) // stride  + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[3])))
@@ -89,14 +56,79 @@ def sequential_presets(name, state_shape, num_actions):
             nn.Softmax(dim=1)
         ]
 
-    if name == "CartPoleReinforceVector":
-        # From https://github.com/pytorch/examples/blob/master/reinforcement_learning/reinforce.py. 
+    if name == "CartPolePi_Vector":
         return [
-            nn.Linear(state_shape[0], 128), 
-            nn.Dropout(p=0.6),
+            nn.Linear(state_shape[0], 64), 
+            nn.ReLU(),
+            nn.Linear(64, 128), 
+            # nn.Dropout(p=0.6),
             nn.ReLU(),
             nn.Linear(128, num_actions),
             nn.Softmax(dim=1)
+        ]
+
+    if name == "CartPoleQ_Pixels":
+        # From https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html.
+        def conv2d_size_out(size, kernel_size=5, stride=2):
+            return (size - (kernel_size - 1) - 1) // stride  + 1
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[3])))
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[2])))
+        linear_input_size = convw * convh * 32
+        return [
+            nn.Conv2d(state_shape[1], 16, kernel_size=5, stride=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=5, stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=5, stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(linear_input_size, num_actions)
+        ]
+
+    if name == "CartPoleQ_Vector":
+        # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
+        return [
+            nn.Linear(state_shape[0], 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_actions)
+        ]
+
+    if name == "CartPoleV_Pixels":
+        # Just change Q version to have one output node.
+        def conv2d_size_out(size, kernel_size=5, stride=2):
+            return (size - (kernel_size - 1) - 1) // stride  + 1
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[3])))
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_shape[2])))
+        linear_input_size = convw * convh * 32
+        return [
+            nn.Conv2d(state_shape[1], 16, kernel_size=5, stride=2),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=5, stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=5, stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(linear_input_size, 1)
+        ]
+
+    if name == "CartPoleV_Vector":
+        return [
+            nn.Linear(state_shape[0], 64), 
+            nn.ReLU(),
+            nn.Linear(64, 128), 
+            # nn.Dropout(p=0.6),
+            nn.ReLU(),
+            nn.Linear(128, 1)
         ]
 
     raise NotImplementedError("Invalid preset name.")
@@ -104,7 +136,7 @@ def sequential_presets(name, state_shape, num_actions):
 
 def multi_headed_presets(name, state_shape, num_actions):
 
-    if name == "CartPoleReinforceVectorWithBaseline":
+    if name == "CartPolePiAndV_Vector":
         # From https://github.com/pytorch/examples/blob/master/reinforcement_learning/reinforce.py. 
         # and https://github.com/pytorch/examples/blob/master/reinforcement_learning/actor_critic.py.
         # (The latter erroneously describes the model as actor-critic; it's REINFORCE with baseline!)

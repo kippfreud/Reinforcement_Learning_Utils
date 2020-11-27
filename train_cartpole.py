@@ -50,22 +50,22 @@ elif run_parameters["model"] == "REINFORCE":
     from agents.reinforce import *
     agent = ReinforceAgent(state_shape, env.action_space.n, model_parameters)
 
-# Make A2CAgent.
-elif run_parameters["model"] == "A2C":
+# Make ActorCritcAgent.
+elif run_parameters["model"] == "ActorCritic":
     model_parameters = {
         "lr_pi": 1e-4,
         "lr_V": 1e-3,
         "gamma": 0.99
     }   
-    from agents.a2c import *
-    agent = A2CAgent(state_shape, env.action_space.n, model_parameters)
+    from agents.actor_critic import *
+    agent = ActorCriticAgent(state_shape, env.action_space.n, model_parameters)
 
 # Initialise weights and biases monitoring.
 if WANDB: 
     wandb.init(project=PROJECT_NAME, config={**agent.P, **run_parameters})
     if run_parameters["model"] == "DQN": wandb.watch(agent.Q)
     elif run_parameters["model"] == "REINFORCE": wandb.watch(agent.pi)
-    elif run_parameters["model"] == "A2C": wandb.watch(agent.pi)
+    elif run_parameters["model"] == "ActorCritic": wandb.watch(agent.pi)
 
 # Run training loop.
 for ep in range(run_parameters["num_episodes"]):
@@ -96,8 +96,8 @@ for ep in range(run_parameters["num_episodes"]):
         # REINFORCE requires us to store all rewards.
         elif run_parameters["model"] == "REINFORCE":
             agent.ep_rewards.append(reward)
-        # A2C updates on every timestep.
-        elif run_parameters["model"] == "A2C":
+        # ActorCritic updates on every timestep.
+        elif run_parameters["model"] == "ActorCritic":
             policy_loss, value_loss = agent.update_on_transition(next_state, torch.tensor([reward], device=agent.device))
         # ============================
 
@@ -114,7 +114,7 @@ for ep in range(run_parameters["num_episodes"]):
         policy_loss, value_loss = agent.update_on_episode() # Update happens here.
         logs["policy_loss"] = policy_loss
         logs["value_loss"] = value_loss
-    elif run_parameters["model"] == "A2C": 
+    elif run_parameters["model"] == "ActorCritic": 
         logs["policy_loss"] = policy_loss
         logs["value_loss"] = value_loss
     # ============================

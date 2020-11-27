@@ -12,7 +12,7 @@ DEFAULT_HYPERPARAMETERS = {
 }
 
 
-class A2CAgent:
+class ActorCriticAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,

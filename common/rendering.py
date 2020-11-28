@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 
 class Renderer:
-
     def __init__(self, env, processor):
         self.thread = RenderThread(env)
         self.thread.start()
@@ -61,7 +60,6 @@ class RenderThread(Thread):
         env.close()
     ```
     """
-
     def __init__(self, env):
         super(RenderThread, self).__init__(target=self.render)
         self._stop_event = Event()
@@ -70,32 +68,20 @@ class RenderThread(Thread):
         self.env = env
 
     def stop(self):
-        """
-        Stops the threads
-        :return:
-        """
+        """Stops the threads."""
         self._stop_event.set()
         self._state_event.set()
 
     def stopped(self):
-        """
-        Check if the thread has been stopped
-        :return:
-        """
+        """Check if the thread has been stopped."""
         return self._stop_event.is_set()
 
     def begin_render(self):
-        """
-        Start rendering the screen
-        :return:
-        """
+        """Start rendering the screen."""
         self._state_event.set()
 
     def get_screen(self):
-        """
-        get and output the screen image
-        :return:
-        """
+        """Get and output the screen image."""
         self._render_event.wait()
         self._render_event.clear()
         return self.screen

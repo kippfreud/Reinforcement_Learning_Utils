@@ -1,12 +1,11 @@
 from common.networks import SequentialNetwork
+from common.memory import ReplayMemory
 
 import random
 import numpy as np
-from collections import namedtuple
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-
 
 DEFAULT_HYPERPARAMETERS = {
     "replay_capacity": 10000,
@@ -45,6 +44,7 @@ class DqnAgent:
         # Tracking variables.
         self.step_count = 0
         self.updates_since_target_clone = 0
+        self.ep_losses = []
 
     def act(self, state):
         """Epsilon-greedy action selection for during learning."""
@@ -62,7 +62,7 @@ class DqnAgent:
         """Use a random batch from the replay memory to update the Q network parameters."""
         if len(self.memory) < self.P["batch_size"]: return 
         # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
-        batch = Transition(*zip(*self.memory.sample(self.P["batch_size"])))
+        batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
         # Separate out into tensors for states, actions and rewards.
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
@@ -87,36 +87,21 @@ class DqnAgent:
         for param in self.Q.parameters():
             param.grad.data.clamp_(-1, 1) # NOTE: Does this implement reward clipping?
         self.optimiser.step()
-        self.updates_since_target_clone += 1
         # Periodically clone target.
+        self.updates_since_target_clone += 1
         if self.updates_since_target_clone >= self.P["updates_between_target_clone"]:
             self.Q_target.load_state_dict(self.Q.state_dict())
             self.updates_since_target_clone = 0
-        return loss
+        return loss.item()
 
+    def per_timestep(self, state, action, reward, next_state):
+        """Operations to perform on each timestep during training."""
+        self.memory.add(state, action, torch.tensor([reward], device=self.device), next_state)
+        self.ep_losses.append(self.update_on_batch())
 
-# Named tuple representing a transition in the environment.
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
-
-class ReplayMemory:
-    """Class for storing transitions for learning."""
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def __len__(self): return len(self.memory) # Length is length of memory list.
-
-    def add(self, *args):
-        """Saves a transition."""
-        # Extend memory if capacity not yet reached.
-        if len(self.memory) < self.capacity: self.memory.append(None) 
-        # Overwrite current entry at this position.
-        self.memory[self.position] = Transition(*args)
-        # Increment position, cycling back to the beginning if needed.
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        """Retrieve a random sample of transitions."""
-        return random.sample(self.memory, batch_size)
+    def per_episode(self):
+        """Operations to perform on each episode end during training."""
+        if self.ep_losses: mean_loss = np.mean(self.ep_losses)
+        else: mean_loss = 0.
+        del self.ep_losses[:]
+        return {"logs":{"epsilon": self.epsilon, "value_loss": mean_loss}}

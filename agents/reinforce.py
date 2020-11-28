@@ -24,19 +24,6 @@ class ReinforceAgent:
             self.P = hyperparameters # Store hyperparameter dictionary.
         else:
             self.P = DEFAULT_HYPERPARAMETERS # Adopt defaults.
-        # if self.P["baseline"] == "adv":
-        #     # Create multi-headed policy and value network.
-        #     if len(state_shape) > 1: raise NotImplementedError()
-        #     else: preset = "CartPolePiAndV_Vector"
-        #     from common.networks import MultiHeadedNetwork
-        #     self.net = MultiHeadedNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)        
-        # else:     
-        #     # Create policy network only.
-        #     if len(state_shape) > 1: preset = "CartPolePi_Pixels"
-        #     else: preset = "CartPolePi_Vector"
-        #     from common.networks import SequentialNetwork
-        #     self.net = SequentialNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)
-        # self.optimiser = optim.Adam(self.net.parameters(), lr=self.P["lr"])
         if len(state_shape) > 1: preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else: preset_pi, preset_V = "CartPolePi_Vector", "CartPoleV_Vector"
         from common.networks import SequentialNetwork
@@ -52,8 +39,6 @@ class ReinforceAgent:
 
     def act(self, state):
         """Probabilistic action selection."""
-        # if self.V is not None: action_probs, value = self.net(state)
-        # else: action_probs = self.net(state)
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
@@ -72,13 +57,11 @@ class ReinforceAgent:
             returns.insert(0, g)
         returns = torch.tensor(returns, device=self.device)
         # Zero gradient buffers of all parameters.
-        # self.optimiser.zero_grad() 
         if self.V is not None: 
             # Update value in the direction of advantage.
             self.optimiser_V.zero_grad()
             log_probs, values = (torch.cat(x) for x in zip(*self.ep_predictions))
             value_loss = F.mse_loss(values, returns)
-            # value_loss.backward(retain_graph=True) # Need to retain when going backward() twice through the same graph.
             value_loss.backward()
             # for param in self.V.parameters(): param.grad.data.clamp_(-1, 1) 
             self.optimiser_V.step()
@@ -88,10 +71,6 @@ class ReinforceAgent:
         policy_loss = (-log_probs * self.baseline(returns, values)).sum()
         policy_loss.backward() 
         self.optimiser_pi.step()
-        # Run backprop using autograd engine and update parameters.
-        # self.optimiser.step()
-        # Empty the memory.
-        del self.ep_predictions[:]; del self.ep_rewards[:] 
         return policy_loss, value_loss
 
     def baseline(self, returns, values):
@@ -104,3 +83,14 @@ class ReinforceAgent:
         if b == "adv":
             # Advantage (subtract value prediction).
             return (returns - values).detach()
+        else: raise NotImplementedError("Baseline method not recognised.")
+
+    def per_timestep(self, state, action, reward, next_state):
+        """Operations to perform on each timestep during training."""
+        self.ep_rewards.append(reward)
+
+    def per_episode(self):
+        """Operations to perform on each episode end during training."""
+        policy_loss, value_loss = self.update_on_episode() 
+        del self.ep_predictions[:]; del self.ep_rewards[:] 
+        return {"logs":{"policy_loss": policy_loss, "value_loss": value_loss}}

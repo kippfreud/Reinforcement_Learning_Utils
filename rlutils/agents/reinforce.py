@@ -27,17 +27,17 @@ class ReinforceAgent:
         # Create pi network (and V if using advantage baselining).
         if len(state_shape) > 1: preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else: preset_pi, preset_V = "CartPolePi_Vector", "CartPoleV_Vector"
-        self.pi = SequentialNetwork(preset=preset_pi, state_shape=state_shape, num_actions=num_actions).to(self.device)
+        self.pi = SequentialNetwork(preset=preset_pi, input_shape=state_shape, output_size=num_actions).to(self.device)
         self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
         if self.P["baseline"] == "adv":
-            self.V = SequentialNetwork(preset=preset_V, state_shape=state_shape, num_actions=num_actions).to(self.device)
+            self.V = SequentialNetwork(preset=preset_V, input_shape=state_shape, output_size=1).to(self.device)
             self.optimiser_V = optim.Adam(self.V.parameters(), lr=self.P["lr_V"])
         else: self.V = None
         # Tracking variables.
         self.ep_predictions = [] # Log prob actions (and value).
         self.ep_rewards = []
 
-    def act(self, state):
+    def act(self, state, no_explore=False):
         """Probabilistic action selection."""
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)

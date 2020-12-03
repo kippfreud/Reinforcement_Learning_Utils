@@ -31,8 +31,8 @@ class DqnAgent:
         # Create Q network.
         if len(state_shape) > 1: preset = "CartPoleQ_Pixels"
         else: preset = "CartPoleQ_Vector"
-        self.Q = SequentialNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)
-        self.Q_target = SequentialNetwork(preset=preset, state_shape=state_shape, num_actions=num_actions).to(self.device)
+        self.Q = SequentialNetwork(preset=preset, input_shape=state_shape, output_size=num_actions).to(self.device)
+        self.Q_target = SequentialNetwork(preset=preset, input_shape=state_shape, output_size=num_actions).to(self.device)
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
         self.Q_target.eval() # Turn off training mode for target net.
         self.num_actions = num_actions
@@ -45,13 +45,11 @@ class DqnAgent:
         self.updates_since_target_clone = 0
         self.ep_losses = []
 
-    def act(self, state):
-        """Epsilon-greedy action selection for during learning."""
-        self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \
-                       np.exp(-1 * self.total_t / self.P["epsilon_decay"])
+    def act(self, state, no_explore=False):
+        """During training: epsilon-greedy action selection."""
         Q = self.Q(state)
         extra = {"Q": Q.detach().numpy()}
-        if random.random() > self.epsilon:
+        if no_explore or random.random() > self.epsilon:
             # Return action with highest Q value.
             return Q.max(1)[1].view(1, 1), extra
         else:
@@ -98,6 +96,8 @@ class DqnAgent:
         self.memory.add(state, action, torch.tensor([reward], device=self.device), next_state)
         loss = self.update_on_batch()
         if loss: self.ep_losses.append(loss)
+        self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \
+                       np.exp(-1 * self.total_t / self.P["epsilon_decay"])
         self.total_t += 1
 
     def per_episode(self):

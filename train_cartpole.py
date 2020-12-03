@@ -1,4 +1,5 @@
-from rlutils.common.training import train
+from rlutils.common.deployment import train
+
 import gym
 from joblib import dump
 
@@ -10,6 +11,7 @@ train_parameters = {
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
     "wandb_monitor": True,
+    "save_trained_agent": False,
     "render": False
 }
 
@@ -61,5 +63,6 @@ elif train_parameters["model"] == "actor-critic":
     agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
 
 run_name = train(agent, env, train_parameters, renderer)
-if not run_name: run_name = "unnamed_run"
-dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.
+if train_parameters["save_trained_agent"]:
+    if not run_name: run_name = "unnamed_run"
+    dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.

@@ -12,10 +12,11 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         import wandb
         run = wandb.init(project=parameters["project_name"], config={**agent.P, **parameters})
         if train:
-            if parameters["model"] == "DQN": wandb.watch(agent.Q)
-            elif parameters["model"] == "REINFORCE": wandb.watch(agent.pi)
-            elif parameters["model"] == "ActorCritic": wandb.watch(agent.pi)
-        
+            if parameters["model"] == "dqn": wandb.watch(agent.Q)
+            elif parameters["model"] == "reinforce": wandb.watch(agent.pi)
+            elif parameters["model"] == "actor-critic": wandb.watch(agent.pi)
+            elif parameters["model"] == "ddpg": wandb.watch(agent.pi)
+
     # Iterate through episodes.
     for ep in tqdm(range(parameters["num_episodes"])):
         state, reward_sum = env.reset(), 0

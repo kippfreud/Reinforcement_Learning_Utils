@@ -5,15 +5,15 @@ import gym
 from joblib import dump
 
 train_parameters = {
-    "project_name": "pendulum",
-    "env": "Pendulum-v0",
+    "project_name": "lunar_lander",
+    "env": "LunarLanderContinuous-v2",
     "model": "ddpg",
-    "num_episodes": 100,
-    "max_timesteps_per_episode": 500,
+    "num_episodes": 1000,
+    "max_timesteps_per_episode": 300,
     # "from_pixels": False,
     "wandb_monitor": False,
     "save_trained_agent": False,
-    "render_freq": 0
+    "render_freq": 5
 }
 
 # Make environment.

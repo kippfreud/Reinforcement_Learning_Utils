@@ -28,9 +28,11 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         for t in range(parameters["max_timesteps_per_episode"]): 
             
             # Get action and advance state.
-            action, extra = agent.act(state)   
-            next_state, reward, done, _ = env.step(action.item())
-            if parameters["render"]: env.render()
+            action, extra = agent.act(state, no_explore=(not train))  
+            try: action_for_env = action.item() # If action is 1D, should just extract its item().
+            except: action_for_env = action
+            next_state, reward, done, _ = env.step(action_for_env)
+            if parameters["render_freq"] > 0 and ep % parameters["render_freq"] == 0: env.render()
             if done: next_state = None
             
             # Get state representation.

@@ -71,7 +71,7 @@ class ReinforceAgent:
             self.optimiser_V.step()
         else: log_probs, values, value_loss = torch.cat(self.ep_predictions), None, 0
         # Update policy in the direction of log_prob(a) * delta.
-        self.optimiser_pi.zero_grad();
+        self.optimiser_pi.zero_grad()
         policy_loss = (-log_probs * self.baseline(returns, values)).sum()
         policy_loss.backward() 
         self.optimiser_pi.step()

@@ -64,15 +64,15 @@ class DdpgAgent:
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
-        # Compute Q(s, a) by running each s, a through self.Q.
+        # Compute Q(s, a) by running each concatenated s, a pair through self.Q.
         Q_values = self.Q(self.sa_concat(states, actions)).squeeze()
         # Identify nonterminal states (note that replay memory elements are initialised to None).
         nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
         nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
         # Use target Q network to compute Q_target(s', a') for each nonterminal next state.    
         # a' is chosen using the target pi network.
-        nonterminal_next_actions = self.pi_target(nonterminal_next_states)
         next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
+        nonterminal_next_actions = self.pi_target(nonterminal_next_states)
         next_Q_values[nonterminal_mask] = self.Q_target(self.sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
         # Compute target = reward + discounted Q_target(s', a').
         Q_targets = rewards + (self.P["gamma"] * next_Q_values)
@@ -82,7 +82,7 @@ class DdpgAgent:
         value_loss = F.mse_loss(Q_values, Q_targets)
         value_loss.backward() 
         self.optimiser_Q.step()
-        # Update policy in the direction of increasing value according to the Q network.
+        # Update policy in the direction of increasing value according to self.Q (the policy gradient).
         policy_loss = -self.Q(self.sa_concat(states, self.pi(states))).mean()
         policy_loss.backward()
         self.optimiser_pi.step()

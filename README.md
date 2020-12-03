@@ -1,6 +1,5 @@
 # Future features
 
-- agent.save() method
 - Move wandb monitoring into a single file (class?)
 - Meta folder that runs experiments (different agents / parameter sweeps)
 - Pass in custom env

@@ -1,10 +1,11 @@
+from rlutils.common.training import train
 import gym
-from common.training import *
+from joblib import dump
 
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "model": "reinforce",
+    "model": "dqn",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
@@ -16,15 +17,15 @@ train_parameters = {
 env = gym.make(train_parameters["env"]).unwrapped
 if train_parameters["from_pixels"]:
     # If from_pixels, set up screen processor.
-    from common.rendering import Renderer
-    from specific.CartPole import screen_processor # <<< NOTE: HARD CODED FOR CARTPOLE!
+    from rlutils.common.rendering import Renderer
+    from rlutils.specific.CartPole import screen_processor # <<< NOTE: HARD CODED FOR CARTPOLE!
     env.reset()
     renderer = Renderer(env, screen_processor)
     state_shape = renderer.get_screen().shape
 else: state_shape, renderer = env.observation_space.shape, None
 
 # Make DqnAgent.
-if train_parameters["model"] == "DQN":
+if train_parameters["model"] == "dqn":
     agent_parameters = {
         "replay_capacity": 10000,
         "batch_size": 128,
@@ -35,7 +36,7 @@ if train_parameters["model"] == "DQN":
         "epsilon_decay": 10000,
         "updates_between_target_clone": 2000
     }
-    from agents.dqn import *
+    from rlutils.agents.dqn import *
     agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)
 
 # Make ReinforceAgent.
@@ -46,7 +47,7 @@ elif train_parameters["model"] == "reinforce":
         "gamma": 0.99,
         "baseline": "adv"
     }   
-    from agents.reinforce import *
+    from rlutils.agents.reinforce import *
     agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters)
 
 # Make ActorCriticAgent.
@@ -56,7 +57,9 @@ elif train_parameters["model"] == "actor-critic":
         "lr_V": 1e-3,
         "gamma": 0.99
     }   
-    from agents.actor_critic import *
+    from rlutils.agents.actor_critic import *
     agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
 
-train(agent, env, train_parameters, renderer)
+run_name = train(agent, env, train_parameters, renderer)
+if not run_name: run_name = "unnamed_run"
+dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.

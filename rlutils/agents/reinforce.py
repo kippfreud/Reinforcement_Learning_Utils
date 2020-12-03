@@ -1,3 +1,5 @@
+from ..common.networks import SequentialNetwork
+
 import numpy as np
 import torch
 import torch.optim as optim
@@ -17,25 +19,23 @@ class ReinforceAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,
-                 hyperparameters=None
+                 hyperparameters=DEFAULT_HYPERPARAMETERS
                  ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if hyperparameters is not None:
-            self.P = hyperparameters # Store hyperparameter dictionary.
-        else:
-            self.P = DEFAULT_HYPERPARAMETERS # Adopt defaults.
+        self.P = hyperparameters 
+        self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
+        # Create pi network (and V if using advantage baselining).
         if len(state_shape) > 1: preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else: preset_pi, preset_V = "CartPolePi_Vector", "CartPoleV_Vector"
-        from common.networks import SequentialNetwork
         self.pi = SequentialNetwork(preset=preset_pi, state_shape=state_shape, num_actions=num_actions).to(self.device)
         self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
         if self.P["baseline"] == "adv":
             self.V = SequentialNetwork(preset=preset_V, state_shape=state_shape, num_actions=num_actions).to(self.device)
             self.optimiser_V = optim.Adam(self.V.parameters(), lr=self.P["lr_V"])
         else: self.V = None
+        # Tracking variables.
         self.ep_predictions = [] # Log prob actions (and value).
         self.ep_rewards = []
-        self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
 
     def act(self, state):
         """Probabilistic action selection."""
@@ -43,9 +43,13 @@ class ReinforceAgent:
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        if self.V is not None: self.ep_predictions.append((dist.log_prob(action), value[0]))
-        else: self.ep_predictions.append(dist.log_prob(action))
-        return action
+        extra = {"pi": action_probs.detach().numpy()}
+        if self.V is not None: 
+            self.ep_predictions.append((dist.log_prob(action), value[0]))
+            extra["V"] = value[0].item()
+        else: 
+            self.ep_predictions.append(dist.log_prob(action))
+        return action, extra
 
     def update_on_episode(self):
         """Use the latest episode of experience to update the policy (and value) network parameters."""
@@ -58,7 +62,7 @@ class ReinforceAgent:
         returns = torch.tensor(returns, device=self.device)
         # Zero gradient buffers of all parameters.
         if self.V is not None: 
-            # Update value in the direction of advantage.
+            # Update value in the direction of advantage using MSE loss.
             self.optimiser_V.zero_grad()
             log_probs, values = (torch.cat(x) for x in zip(*self.ep_predictions))
             value_loss = F.mse_loss(values, returns)
@@ -71,7 +75,7 @@ class ReinforceAgent:
         policy_loss = (-log_probs * self.baseline(returns, values)).sum()
         policy_loss.backward() 
         self.optimiser_pi.step()
-        return policy_loss, value_loss
+        return policy_loss.item(), value_loss.item()
 
     def baseline(self, returns, values):
         """Apply baselining to returns to improve update stability."""

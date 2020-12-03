@@ -31,7 +31,7 @@ if train_parameters["model"] == "dqn":
     agent_parameters = {
         "replay_capacity": 10000,
         "batch_size": 128,
-        "lr": 1e-3,
+        "lr_Q": 1e-3,
         "gamma": 0.99,
         "epsilon_start": 0.9,
         "epsilon_end": 0.05,

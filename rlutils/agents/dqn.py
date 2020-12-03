@@ -11,7 +11,7 @@ import torch.nn.functional as F
 DEFAULT_HYPERPARAMETERS = {
     "replay_capacity": 10000,
     "batch_size": 128,
-    "lr": 1e-3,
+    "lr_Q": 1e-3,
     "gamma": 0.99,
     "epsilon_start": 0.9,
     "epsilon_end": 0.05,
@@ -36,7 +36,7 @@ class DqnAgent:
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
         self.Q_target.eval() # Turn off training mode for target net.
         self.num_actions = num_actions
-        self.optimiser = optim.Adam(self.Q.parameters(), lr=self.P["lr"])
+        self.optimiser = optim.Adam(self.Q.parameters(), lr=self.P["lr_Q"])
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.

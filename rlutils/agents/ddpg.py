@@ -52,7 +52,7 @@ class DdpgAgent:
     def act(self, state, no_explore=False):
         """During training: deterministic action selection plus additive noise."""
         action = self.pi(state)
-        action = action.detach().numpy()[0,0]
+        action = action.detach().numpy()[0]
         if no_explore: return self.pi(state).detach().numpy()[0], {}
         else: return self.noise.get_action(action, self.ep_t), {}
 

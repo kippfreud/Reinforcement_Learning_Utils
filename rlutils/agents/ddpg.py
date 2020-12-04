@@ -29,7 +29,7 @@ class DdpgAgent:
         self.P = hyperparameters 
         # Create pi and Q networks.
         if len(state_shape) > 1: raise NotImplementedError()
-        else: preset_pi, preset_Q = "StableBaselinesPi_Vector", "StableBaselinesQ_Vector"
+        else: preset_pi, preset_Q = "PendulumPi_Vector", "PendulumQ_Vector"
         num_actions = action_space.shape[0]
         self.pi = SequentialNetwork(preset=preset_pi, input_shape=state_shape, output_size=num_actions).to(self.device)
         self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
@@ -52,8 +52,7 @@ class DdpgAgent:
     
     def act(self, state, explore=True):
         """Deterministic action selection plus additive noise."""
-        action = self.pi(state)
-        action = action.detach().numpy()[0]
+        action = self.pi(state).detach().numpy()[0]
         if explore: return self.noise.get_action(action, self.total_t), {}
         else: return action, {"Qa":None}
 

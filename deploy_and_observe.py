@@ -5,13 +5,14 @@ from rlutils.common.observer import Observer
 import gym
 from joblib import load
 
-RUN_NAME = "lyric-bee-11"
+RUN_NAME = "jumping-sun-13"
 
 deploy_parameters = {
-    "num_episodes": 2,
-    "max_timesteps_per_episode": 500,
+    "num_episodes": 1,
+    "max_timesteps_per_episode": 100,
     "wandb_monitor": False,
-    "render": False
+    "render_freq": 1,
+    "save_final_agent": False
 }
 
 # Create observer class.

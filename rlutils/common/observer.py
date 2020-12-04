@@ -22,7 +22,7 @@ class Observer:
         # Basics: state, action and reward.
         observation = [ep, t] \
                     + list(state.numpy().flatten()) \
-                    + list(action.numpy().flatten()) \
+                    + list(action) \
                     + [reward]
         # Extra information produced by the agent in addition to its action.
         for k,v in extra.items():

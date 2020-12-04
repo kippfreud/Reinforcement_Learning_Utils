@@ -72,5 +72,4 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         if parameters["wandb_monitor"]: run_name = run.name # Using wandb run name if possible.
         else: import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
         dump(agent, f"{run_name}.joblib") 
-
-    return run_name # Return run name for reference.
+        return run_name # Return run name for reference.

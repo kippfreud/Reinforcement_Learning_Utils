@@ -46,7 +46,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
 
             if observer:
                 # Send an observation to the observer.
-                observer.observe(ep, t, state, action, reward, next_state, extra)
+                observer.observe(ep, t, state, action_for_env, reward, next_state, extra)
 
             # Update tracking variables and terminate episode if done.
             reward_sum += reward; state = next_state
@@ -71,5 +71,5 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         from joblib import dump
         if parameters["wandb_monitor"]: run_name = run.name # Using wandb run name if possible.
         else: import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
-        dump(agent, f"{run_name}.joblib") 
+        dump(agent, f"saved_runs/{run_name}.joblib") 
         return run_name # Return run name for reference.

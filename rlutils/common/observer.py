@@ -15,6 +15,7 @@ class Observer:
         if illegal: raise Exception(f"dim_names {illegal} illegal because they are protected.")
         # List the dimensions in the dataset to be constructed.
         self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names + ["reward"]
+        self.num_actions = len(action_dim_names)
         # Initialise empty dataset.
         self.data = []
 
@@ -22,7 +23,7 @@ class Observer:
         # Basics: state, action and reward.
         observation = [ep, t] \
                     + list(state.numpy().flatten()) \
-                    + list(action) \
+                    + list([action] if self.num_actions == 1 else list(action)) \
                     + [reward]
         # Extra information produced by the agent in addition to its action.
         for k,v in extra.items():

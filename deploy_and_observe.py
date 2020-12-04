@@ -5,6 +5,7 @@ from rlutils.common.observer import Observer
 import gym
 from joblib import load
 
+# RUN_NAME = "cosmic-yogurt-123"
 RUN_NAME = "jumping-sun-13"
 
 deploy_parameters = {
@@ -24,8 +25,8 @@ observer = Observer(
                     )
 
 # Deploy agent in environment.
-deploy(agent=load(f"{RUN_NAME}.joblib"),
-       # env=gym.make("CartPole-v1"),
+deploy(agent=load(f"saved_runs/{RUN_NAME}.joblib"),
+    #    env=gym.make("CartPole-v1"),
        env=NormalizedEnv(gym.make("LunarLanderContinuous-v2")),
        parameters=deploy_parameters,
        observer=observer

@@ -2,3 +2,4 @@ wandb/**
 video/**
 __pycache__/
 .idea/
+venv/

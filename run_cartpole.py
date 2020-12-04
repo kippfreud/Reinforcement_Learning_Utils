@@ -5,7 +5,7 @@ train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
     "model": "reinforce",
-    "num_episodes": 2000,
+    "num_episodes": 5, #2000
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
     "wandb_monitor": True,

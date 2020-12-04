@@ -1,18 +1,20 @@
 import torch # <<< NOTE: Would be good to get rid of this requirement. 
 from tqdm import tqdm
+import gym
 
 def train(agent, env, train_parameters, renderer=None):
 
     # Initialise weights and biases monitoring.
     if train_parameters["wandb_monitor"]: 
         import wandb
-        wandb.init(project=train_parameters["project_name"], config={**agent.P, **train_parameters})
+        wandb.init(train_parameters["project_name"], monitor_gym=True, config={**agent.P, **train_parameters})
         if train_parameters["model"] == "DQN": wandb.watch(agent.Q)
         elif train_parameters["model"] == "REINFORCE": wandb.watch(agent.pi)
         elif train_parameters["model"] == "ActorCritic": wandb.watch(agent.pi)
     
     # Iterate through episodes.
     for ep in tqdm(range(train_parameters["num_episodes"])):
+        env = gym.wrappers.Monitor(env, f'./video/{ep}', force=True) # record a new video every episode
         state, reward_sum = env.reset(), 0
         
         # Get state representation.

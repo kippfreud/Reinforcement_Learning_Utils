@@ -60,3 +60,5 @@ elif train_parameters["model"] == "actor-critic":
     agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
 
 train(agent, env, train_parameters, renderer)
+
+print("DONE")

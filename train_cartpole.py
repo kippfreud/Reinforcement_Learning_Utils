@@ -5,13 +5,13 @@ import gym
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "model": "dqn",
+    "model": "reinforce",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
     "wandb_monitor": False,
-    "render_freq": 0
-    "save_video":False
+    "render_freq": 0,
+    "save_video": False,
     "save_final_agent": False,
 }
 

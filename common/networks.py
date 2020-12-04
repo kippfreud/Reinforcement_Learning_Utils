@@ -9,7 +9,6 @@ class SequentialNetwork(nn.Module):
             assert state_shape is not None and num_actions is not None, "Must specify state_shape and num_actions."
             layers = sequential_presets(preset, state_shape, num_actions)
         self.layers = nn.Sequential(*layers)
-
     def forward(self, x): return self.layers(x)
 
 

@@ -39,6 +39,7 @@ class ReinforceAgent:
 
     def act(self, state):
         """Probabilistic action selection."""
+        state = state.to(self.device)
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.

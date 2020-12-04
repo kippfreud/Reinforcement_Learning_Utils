@@ -67,7 +67,8 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
     env.close()
 
     # Save final agent if requested.
-    if train_parameters["save_final_agent"]:
+    if parameters["save_final_agent"]:
+        from joblib import dump
         if parameters["wandb_monitor"]: run_name = run.name # Using wandb run name if possible.
         else: import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
         dump(agent, f"{run_name}.joblib") 

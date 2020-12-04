@@ -2,7 +2,6 @@ from rlutils.common.deployment import train
 from rlutils.common.env_wrappers import NormalizedEnv
 
 import gym
-from joblib import dump
 
 train_parameters = {
     "project_name": "lunar_lander",

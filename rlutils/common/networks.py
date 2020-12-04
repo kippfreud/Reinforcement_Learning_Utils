@@ -151,6 +151,26 @@ def sequential_presets(name, input_shape, output_size):
             nn.Linear(256, output_size)
         ]
 
+    if name == "StableBaselinesPi_Vector":
+        # From https://towardsdatascience.com/deep-deterministic-policy-gradients-explained-2d94655a9b7b.
+        return [
+            nn.Linear(input_shape[0], 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Linear(64, output_size),
+            nn.Tanh()
+        ]
+
+    if name == "StableBaselinesQ_Vector":
+        return [
+            nn.Linear(input_shape[0], 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Linear(64, output_size)
+        ]
+
     raise NotImplementedError(f"Invalid preset name {name}.")
 
 

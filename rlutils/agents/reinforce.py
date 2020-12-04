@@ -37,7 +37,7 @@ class ReinforceAgent:
         self.ep_predictions = [] # Log prob actions (and value).
         self.ep_rewards = []
 
-    def act(self, state, no_explore=False):
+    def act(self, state, explore=True):
         """Probabilistic action selection."""
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)

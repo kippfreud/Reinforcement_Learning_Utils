@@ -1,4 +1,4 @@
-import torch # <<< NOTE: Would be good to get rid of this requirement. 
+import torch 
 from tqdm import tqdm
 
 
@@ -29,9 +29,9 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         for t in range(parameters["max_timesteps_per_episode"]): 
             
             # Get action and advance state.
-            action, extra = agent.act(state, no_explore=(not train))  
-            try: action_for_env = action.item() # If action is 1D, should just extract its item().
-            except: action_for_env = action
+            action, extra = agent.act(state, explore=train) # If not in training mode, turn exploration off.
+            try: action_for_env = action.item() # If action is 1D, just extract its item().
+            except: action_for_env = action # Otherwise, keep the whole vector.
             next_state, reward, done, _ = env.step(action_for_env)
             if parameters["render_freq"] > 0 and ep % parameters["render_freq"] == 0: env.render()
             if done: next_state = None
@@ -55,7 +55,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         if train:
             # Perform some agent-specific operations on each episode.
             results = agent.per_episode()    
-        else: results = {"logs":{}}    
+        else: results = {"logs":{}}  
 
         # Log to weights and biases.
         if parameters["wandb_monitor"]: 
@@ -66,5 +66,10 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
     if renderer: renderer.close()
     env.close()
 
-    # Return wandb run name for reference.
-    if parameters["wandb_monitor"]: return run.name 
+    # Save final agent if requested.
+    if train_parameters["save_final_agent"]:
+        if parameters["wandb_monitor"]: run_name = run.name # Using wandb run name if possible.
+        else: import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
+        dump(agent, f"{run_name}.joblib") 
+
+    return run_name # Return run name for reference.

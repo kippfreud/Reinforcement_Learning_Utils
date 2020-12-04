@@ -1,12 +1,13 @@
 from collections import namedtuple
 import random
 
+element = namedtuple('element', ('state', 'action', 'reward', 'next_state'))
 
 class ReplayMemory:
     def __init__(self, capacity):
         self.capacity = capacity
         # Structure of a memory element.
-        self.element = namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
+        self.element = element
         self.memory = []
         self.position = 0
 

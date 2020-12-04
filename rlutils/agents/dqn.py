@@ -41,15 +41,15 @@ class DqnAgent:
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.
         self.epsilon = self.P["epsilon_start"]
-        self.total_t = 0
+        self.total_t = 0 # Used for epsilon decay.
         self.updates_since_target_clone = 0
         self.ep_losses = []
 
-    def act(self, state, no_explore=False):
-        """During training: epsilon-greedy action selection."""
+    def act(self, state, explore=True):
+        """Epsilon-greedy action selection."""
         Q = self.Q(state)
         extra = {"Q": Q.detach().numpy()}
-        if no_explore or random.random() > self.epsilon:
+        if (not explore) or random.random() > self.epsilon:
             # Return action with highest Q value.
             return Q.max(1)[1].view(1, 1), extra
         else:
@@ -82,7 +82,7 @@ class DqnAgent:
         loss = F.smooth_l1_loss(Q_values, Q_targets.unsqueeze(1))
         loss.backward() 
         for param in self.Q.parameters():
-            param.grad.data.clamp_(-1, 1) # NOTE: Does this implement reward clipping?
+            param.grad.data.clamp_(-1, 1) # Implement gradient clipping.
         self.optimiser.step()
         # Periodically clone target.
         self.updates_since_target_clone += 1

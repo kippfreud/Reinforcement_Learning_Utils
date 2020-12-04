@@ -15,6 +15,7 @@ DEFAULT_HYPERPARAMETERS = {
     "lr_Q": 1e-3,
     "gamma": 0.99,
     "tau": 1e-2,
+    "noise_params": (0., 0.15, 0.1, 0.1, 100000)
 }
 
 
@@ -28,7 +29,7 @@ class DdpgAgent:
         self.P = hyperparameters 
         # Create pi and Q networks.
         if len(state_shape) > 1: raise NotImplementedError()
-        else: preset_pi, preset_Q = "PendulumPi_Vector", "PendulumQ_Vector"
+        else: preset_pi, preset_Q = "StableBaselinesPi_Vector", "StableBaselinesQ_Vector"
         num_actions = action_space.shape[0]
         self.pi = SequentialNetwork(preset=preset_pi, input_shape=state_shape, output_size=num_actions).to(self.device)
         self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
@@ -44,17 +45,17 @@ class DdpgAgent:
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Create noise process for exploration.
-        self.noise = OUNoise(action_space)
+        self.noise = OUNoise(action_space, *self.P["noise_params"])
         # Tracking variables.   
-        self.ep_t = 0 # Used by noise process.
+        self.total_t = 0 # Used for noise decay.
         self.ep_losses = []  
     
-    def act(self, state, no_explore=False):
-        """During training: deterministic action selection plus additive noise."""
+    def act(self, state, explore=True):
+        """Deterministic action selection plus additive noise."""
         action = self.pi(state)
         action = action.detach().numpy()[0]
-        if no_explore: return self.pi(state).detach().numpy()[0], {}
-        else: return self.noise.get_action(action, self.ep_t), {}
+        if explore: return self.noise.get_action(action, self.total_t), {}
+        else: return action, {"Qa":None}
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the pi and Q network parameters."""
@@ -79,8 +80,11 @@ class DdpgAgent:
         # Zero gradient buffers of all parameters.
         self.optimiser_pi.zero_grad(); self.optimiser_Q.zero_grad()
         # Update value in the direction of TD error using MSE loss. 
-        value_loss = F.mse_loss(Q_values, Q_targets)
+        # value_loss = F.mse_loss(Q_values, Q_targets)
+        value_loss = F.smooth_l1_loss(Q_values, Q_targets)
         value_loss.backward() 
+        for param in self.Q.parameters():
+            param.grad.data.clamp_(-1, 1) # Implement gradient clipping.
         self.optimiser_Q.step()
         # Update policy in the direction of increasing value according to self.Q (the policy gradient).
         policy_loss = -self.Q(self.sa_concat(states, self.pi(states))).mean()
@@ -102,11 +106,11 @@ class DdpgAgent:
         self.memory.add(state, torch.tensor([action], device=self.device), torch.tensor([reward], device=self.device), next_state)
         losses = self.update_on_batch()
         if losses: self.ep_losses.append(losses)
-        self.ep_t += 1
+        self.total_t += 1
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""
         if self.ep_losses: mean_policy_loss, mean_value_loss = np.mean(self.ep_losses, axis=0)
         else: mean_policy_loss, mean_value_loss = 0., 0.
-        del self.ep_losses[:]; self.noise.reset(); self.ep_t = 0
-        return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss}}
+        del self.ep_losses[:]; #self.noise.reset(); self.total_t = 0
+        return {"logs":{"sigma": self.noise.sigma, "policy_loss": mean_policy_loss, "value_loss": mean_value_loss}}

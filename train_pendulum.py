@@ -12,7 +12,7 @@ train_parameters = {
     "max_timesteps_per_episode": 500,
     # "from_pixels": False,
     "wandb_monitor": False,
-    "save_trained_agent": False,
+    "save_final_agent": False,
     "render_freq": 0
 }
 
@@ -33,6 +33,3 @@ if train_parameters["model"] == "ddpg":
     agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
 
 run_name = train(agent, env, train_parameters, None)
-if train_parameters["save_trained_agent"]:
-    if not run_name: run_name = "unnamed_run"
-    dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.

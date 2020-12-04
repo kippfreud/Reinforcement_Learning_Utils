@@ -11,7 +11,7 @@ train_parameters = {
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
     "wandb_monitor": False,
-    "save_trained_agent": False,
+    "save_final_agent": False,
     "render_freq": 0
 }
 
@@ -63,6 +63,3 @@ elif train_parameters["model"] == "actor-critic":
     agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
 
 run_name = train(agent, env, train_parameters, renderer)
-if train_parameters["save_trained_agent"]:
-    if not run_name: run_name = "unnamed_run"
-    dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.

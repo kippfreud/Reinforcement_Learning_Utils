@@ -8,11 +8,11 @@ train_parameters = {
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
     "model": "ddpg",
-    "num_episodes": 1000,
-    "max_timesteps_per_episode": 300,
+    "num_episodes": 1,
+    "max_timesteps_per_episode": 500,
     # "from_pixels": False,
-    "wandb_monitor": True,
-    "save_trained_agent": False,
+    "wandb_monitor": False,
+    "save_final_agent": True,
     "render_freq": 0
 }
 
@@ -28,11 +28,9 @@ if train_parameters["model"] == "ddpg":
         "lr_Q": 1e-3,
         "gamma": 0.99,
         "tau": 1e-2,
+        "noise_params": (0., 0.15, 0.5, 0.01, 300000)
     }
     from rlutils.agents.ddpg import *
     agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
 
 run_name = train(agent, env, train_parameters, None)
-if train_parameters["save_trained_agent"]:
-    if not run_name: run_name = "unnamed_run"
-    dump(agent, f"{run_name}.joblib") # Save agent using wandb run name.

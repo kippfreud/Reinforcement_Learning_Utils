@@ -34,7 +34,7 @@ class ActorCriticAgent:
         self.last_s_l_v = None # State, log prob action and value.
         self.ep_losses = []
 
-    def act(self, state, no_explore=False):
+    def act(self, state, explore=True):
         """Probabilistic action selection."""
         action_probs, value = self.pi(state), self.V(state)
         dist = Categorical(action_probs) # Categorical action distribution.

@@ -9,8 +9,8 @@ from joblib import load
 RUN_NAME = "jumping-sun-13"
 
 deploy_parameters = {
-    "num_episodes": 1,
-    "max_timesteps_per_episode": 100,
+    "num_episodes": 1000,
+    "max_timesteps_per_episode": 500,
     "wandb_monitor": False,
     "render_freq": 1,
     "save_final_agent": False
@@ -32,4 +32,4 @@ deploy(agent=load(f"saved_runs/{RUN_NAME}.joblib"),
        observer=observer
        )
 
-print(observer.dataframe())
+observer.dataframe().to_csv(f"{RUN_NAME}.csv")

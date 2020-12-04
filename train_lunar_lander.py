@@ -10,9 +10,9 @@ train_parameters = {
     "num_episodes": 1000,
     "max_timesteps_per_episode": 500,
     # "from_pixels": False,
-    "wandb_monitor": True,
-    "save_final_agent": True,
-    "render_freq": 10
+    "wandb_monitor": False,
+    "save_final_agent": False,
+    "render_freq": 0
 }
 
 # Make environment.

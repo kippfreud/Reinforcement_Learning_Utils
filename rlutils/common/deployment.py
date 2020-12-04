@@ -1,4 +1,5 @@
 import torch 
+import gym
 from tqdm import tqdm
 
 
@@ -10,15 +11,19 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
     # Initialise weights and biases monitoring.
     if parameters["wandb_monitor"]: 
         import wandb
-        run = wandb.init(project=parameters["project_name"], config={**agent.P, **parameters})
+        run = wandb.init(project=parameters["project_name"], monitor_gym=True, config={**agent.P, **parameters})
+        run_name = run.name
         if train:
             if parameters["model"] == "dqn": wandb.watch(agent.Q)
             elif parameters["model"] == "reinforce": wandb.watch(agent.pi)
             elif parameters["model"] == "actor-critic": wandb.watch(agent.pi)
             elif parameters["model"] == "ddpg": wandb.watch(agent.pi)
+    else:
+        import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Iterate through episodes.
     for ep in tqdm(range(parameters["num_episodes"])):
+        if parameters["save_video"]: env = gym.wrappers.Monitor(env, f"./video/{run_name}/{ep}", force=True) # Record a new video every episode.
         state, reward_sum = env.reset(), 0
         
         # Get state representation.
@@ -69,7 +74,5 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
     # Save final agent if requested.
     if parameters["save_final_agent"]:
         from joblib import dump
-        if parameters["wandb_monitor"]: run_name = run.name # Using wandb run name if possible.
-        else: import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
         dump(agent, f"saved_runs/{run_name}.joblib") 
-        return run_name # Return run name for reference.
+    return run_name # Return run name for reference.

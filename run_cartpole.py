@@ -7,7 +7,7 @@ train_parameters = {
     "model": "reinforce",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
-    "from_pixels": False,
+    "from_pixels": True,
     "wandb_monitor": True,
     "render": False
 }

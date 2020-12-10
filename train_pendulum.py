@@ -1,5 +1,5 @@
 from rlutils.common.deployment import train
-from rlutils.common.env_wrappers import NormalizedEnv
+from rlutils.common.env_wrappers import NormaliseActionWrapper
 
 import gym
 
@@ -17,9 +17,9 @@ train_parameters = {
 }
 
 # Make environment.
-env = NormalizedEnv(gym.make(train_parameters["env"]))
+env = NormaliseActionWrapper(gym.make(train_parameters["env"]))
 
-# Make DqnAgent.
+# Make DdpgAgent.
 if train_parameters["model"] == "ddpg":
     agent_parameters = {
         "replay_capacity": 50000,
@@ -33,4 +33,4 @@ if train_parameters["model"] == "ddpg":
     from rlutils.agents.ddpg import *
     agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
 
-run_name = train(agent, env, train_parameters, None)
+run_name = train(agent, env, train_parameters)

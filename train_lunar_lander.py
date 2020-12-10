@@ -1,25 +1,32 @@
 from rlutils.common.deployment import train
-from rlutils.common.env_wrappers import NormalizedEnv
+from rlutils.common.env_wrappers import NormaliseActionWrapper, CustomRewardWrapper
 
 import gym
 
 train_parameters = {
+    # * = Not used by StableBaselinesAgent.
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
-    "model": "ddpg",
-    "num_episodes": 1000,
-    "max_timesteps_per_episode": 500,
-    # "from_pixels": False,
-    "wandb_monitor": False,
-    "render_freq": 0,
+    "model": "stable_baselines",
+    "num_episodes": 1000, # *
+    "max_timesteps_per_episode": 500, # *
+    "wandb_monitor": True, # *
+    "render_freq": 1,
     "save_video": False,
-    "save_final_agent": False,
+    "save_final_agent": True,
 }
 
-# Make environment.
-env = NormalizedEnv(gym.make(train_parameters["env"]))
+# ===================================
+# EXPERIMENT WITH CUSTOM REWARD FUNCTIONS
+from custom_reward_experiment import R
+# ===================================
 
-# Make DqnAgent.
+# Make environment with wrappers.
+env = CustomRewardWrapper(
+      NormaliseActionWrapper(
+      gym.make(train_parameters["env"])), R=R)
+
+# Make DdpgAgent.
 if train_parameters["model"] == "ddpg":
     agent_parameters = {
         "replay_capacity": 50000,
@@ -33,4 +40,17 @@ if train_parameters["model"] == "ddpg":
     from rlutils.agents.ddpg import *
     agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
 
-run_name = train(agent, env, train_parameters, None)
+# Make StableBaselinesAgent.
+elif train_parameters["model"] == "stable_baselines":
+    agent_parameters = {
+        "model_class": "sac",
+        "verbose": True
+    }
+    del train_parameters["num_episodes"], train_parameters["max_timesteps_per_episode"]
+    train_parameters["sb_parameters"] = {
+        "total_timesteps": int(5e5)
+    }
+    from rlutils.agents.stable_baselines import *
+    agent = StableBaselinesAgent(env, agent_parameters)
+
+train(agent, env, train_parameters)

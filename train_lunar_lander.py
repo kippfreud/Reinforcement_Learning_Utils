@@ -7,13 +7,13 @@ train_parameters = {
     # * = Not used by StableBaselinesAgent.
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
-    "model": "stable_baselines",
+    "model": "ddpg",
     "num_episodes": 1000, # *
     "max_timesteps_per_episode": 500, # *
-    "wandb_monitor": True, # *
+    "wandb_monitor": False, # *
     "render_freq": 1,
     "save_video": False,
-    "save_final_agent": True,
+    "save_final_agent": False,
 }
 
 # ===================================

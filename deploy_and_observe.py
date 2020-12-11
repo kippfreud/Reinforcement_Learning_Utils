@@ -6,7 +6,7 @@ import gym
 from joblib import load
 
 # RUN_NAME = "cosmic-yogurt-123"
-RUN_NAME = "polished-frog-25"
+RUN_NAME = "untitled_2020-12-10_15-16-29"
 
 deploy_parameters = {
     "num_episodes": 1000,
@@ -30,12 +30,19 @@ observer = Observer(
 from custom_reward_experiment import R
 # ===================================
 
+env = CustomRewardWrapper(
+      NormaliseActionWrapper(
+      gym.make("LunarLanderContinuous-v2")), R=R)
+
+# agent = load(f"saved_runs/{RUN_NAME}.joblib")
+from rlutils.agents.stable_baselines import *
+agent = StableBaselinesAgent(env, {"model_class": "sac", "verbose": True})
+agent.load(f"saved_runs/{RUN_NAME}")
+
 # Deploy agent in environment.
-deploy(agent=load(f"saved_runs/{RUN_NAME}.joblib"),
+deploy(agent=agent,
     #    env=gym.make("CartPole-v1"),
-       env=CustomRewardWrapper(
-           NormaliseActionWrapper(
-           gym.make("LunarLanderContinuous-v2")), R=R),
+       env=env,
        parameters=deploy_parameters,
        observer=observer
        )

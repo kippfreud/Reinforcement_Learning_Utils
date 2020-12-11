@@ -25,11 +25,8 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Stable Baselines uses its own training and saving procedures.
-    if type(agent)==StableBaselinesAgent:
+    if train and type(agent)==StableBaselinesAgent:
         agent.train(parameters["sb_parameters"])
-        if parameters["save_final_agent"]:
-            agent.save(f"saved_runs/{run_name}") 
-
     else:
         # Iterate through episodes.
         for ep in tqdm(range(parameters["num_episodes"])):
@@ -85,8 +82,11 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         if renderer: renderer.close()
         env.close()
 
-        # Save final agent if requested.
-        if parameters["save_final_agent"]:
+    # Save final agent if requested.
+    if parameters["save_final_agent"]:
+        if type(agent)==StableBaselinesAgent: 
+            agent.save(f"saved_runs/{run_name}") 
+        else:
             from joblib import dump
             dump(agent, f"saved_runs/{run_name}.joblib") 
 

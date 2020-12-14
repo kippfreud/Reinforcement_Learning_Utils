@@ -2,6 +2,7 @@ from rlutils.common.deployment import train
 from rlutils.common.env_wrappers import NormaliseActionWrapper
 
 import gym
+import torch
 
 train_parameters = {
     "project_name": "pendulum",
@@ -18,6 +19,8 @@ train_parameters = {
 
 # Make environment.
 env = NormaliseActionWrapper(gym.make(train_parameters["env"]))
+# Configure device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Make DdpgAgent.
 if train_parameters["model"] == "ddpg":
@@ -31,6 +34,6 @@ if train_parameters["model"] == "ddpg":
         "noise_params": (0., 0.15, 0.5, 0.01, 300000)
     }
     from rlutils.agents.ddpg import *
-    agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
+    agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters, device)
 
 run_name = train(agent, env, train_parameters)

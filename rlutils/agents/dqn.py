@@ -51,7 +51,8 @@ class DqnAgent:
 
     def act(self, state, explore=True):
         """Epsilon-greedy action selection."""
-        Q = self.Q(state.to(self.device))
+        state = state.to(self.device)
+        Q = self.Q(state)
         extra = {"Q": Q.cpu().detach().numpy()}
         if (not explore) or random.random() > self.epsilon:
             # Return action with highest Q value.

@@ -53,7 +53,8 @@ class ActorCriticAgent:
         "Need to store prediction on each timestep. Ensure using agent.act()."        
         state, log_prob, value = self.last_s_l_v
         # Get value prediction for next state.
-        if next_state is not None: next_value = self.V(next_state)[0]
+        if next_state is not None:
+            next_value = self.V(next_state.to(self.device))[0]
         else: next_value = 0 # Handle terminal.
         # Calculate TD target and error.
         td_target = reward + (self.P["gamma"] * next_value)

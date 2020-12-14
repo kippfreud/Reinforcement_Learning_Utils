@@ -6,7 +6,7 @@ import torch
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "model": "reinforce",
+    "model": "dqn",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
     "from_pixels": False,

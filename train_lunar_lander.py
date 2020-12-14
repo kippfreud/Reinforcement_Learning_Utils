@@ -1,5 +1,5 @@
 from rlutils.common.deployment import train
-from rlutils.common.env_wrappers import NormaliseActionWrapper, CustomRewardWrapper
+from rlutils.common.env_wrappers import NormaliseActionWrapper
 
 import gym
 
@@ -16,18 +16,8 @@ train_parameters = {
     "save_final_agent": False,
 }
 
-# ===================================
-# EXPERIMENT WITH CUSTOM REWARD FUNCTIONS
-from custom_reward_experiment import R
-# ===================================
-
-# Make environment with wrappers.
-env = (
-      #CustomRewardWrapper(
-      NormaliseActionWrapper(
-      gym.make(train_parameters["env"]))
-      #, R=R)
-      )
+# Make environment with action normalisation wrapper.
+env = NormaliseActionWrapper(gym.make(train_parameters["env"]))
 
 # Make DdpgAgent.
 if train_parameters["model"] in ("ddpg","td3"):

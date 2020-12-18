@@ -53,9 +53,9 @@ class MetaFeatureWrapper(gym.Wrapper):
 
     def step(self, action):
         next_state, reward, done, info = self.env.step(action)
-        self.states.append(next_state)
         self.actions.append(action)
         self.rewards.append(reward)
         self.infos.append(info)
         info_add = self.f(self.states, self.actions, self.rewards, self.infos)
+        self.states.append(next_state) # NOTE: Append next state *afterwards*.
         return next_state, reward, done, {**info, **info_add}

@@ -36,9 +36,10 @@ class CustomRewardWrapper(gym.Wrapper):
 
 class MetaFeatureWrapper(gym.Wrapper):
     """
-    Constructs a dictionary of additional observation features, that are *not* given to the agent, 
-    but are instead appended to info. Has access to all (state, action, reward, info) tuples  
-    so far in the episode.
+    Constructs a dictionary of additional observation features, 
+    that are *not* given to the agent, but are instead appended to info. 
+    Has access to all historical (state, action, reward, info)
+    tuples from the current episode .
     """
     def __init__(self, env, f):
         self.env = env
@@ -52,5 +53,9 @@ class MetaFeatureWrapper(gym.Wrapper):
 
     def step(self, action):
         next_state, reward, done, info = self.env.step(action)
+        self.states.append(next_state)
+        self.actions.append(action)
+        self.rewards.append(reward)
+        self.infos.append(info)
         info_add = self.f(self.states, self.actions, self.rewards, self.infos)
         return next_state, reward, done, {**info, **info_add}

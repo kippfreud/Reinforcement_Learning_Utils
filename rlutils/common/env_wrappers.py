@@ -6,15 +6,16 @@ class NormaliseActionWrapper(gym.ActionWrapper):
     For environments with continuous action spaces.
     Maps normalised actions in [0,1] into the range used by the environment.
     """
-    def action(self, action):
-        act_k = (self.action_space.high - self.action_space.low)/ 2.
-        act_b = (self.action_space.high + self.action_space.low)/ 2.
-        return act_k * action + act_b
+    def __init__(self, env):
+        super().__init__(env)
+        self.act_k = (self.action_space.high - self.action_space.low)/ 2.
+        self.act_k_inv = 2./(self.action_space.high - self.action_space.low)
+        self.act_b = (self.action_space.high + self.action_space.low)/ 2.
 
-    def reverse_action(self, action):
-        act_k_inv = 2./(self.action_space.high - self.action_space.low)
-        act_b = (self.action_space.high + self.action_space.low)/ 2.
-        return act_k_inv * (action - act_b)
+    def action(self, action): 
+        return self.act_k * action + self.act_b
+
+    def reverse_action(self, action): return self.act_k_inv * (action - self.act_b)
 
 
 class CustomRewardWrapper(gym.Wrapper): 
@@ -23,11 +24,33 @@ class CustomRewardWrapper(gym.Wrapper):
     NOTE: uses next_state not current one!
     """
     def __init__(self, env, R):
-        super().__init__(env)
         self.env = env
-        self.R = R
+        super().__init__(self.env)
+        self.R = R # This is the reward function.
         
     def step(self, action):
         next_state, _, done, info = self.env.step(action)
-        reward, done = self.R(next_state, action, done)
-        return next_state, reward, done, info
+        reward, done, info_add = self.R(next_state, action, done, info)
+        return next_state, reward, done, {**info, **info_add}
+
+
+class MetaFeatureWrapper(gym.Wrapper):
+    """
+    Constructs a dictionary of additional observation features, that are *not* given to the agent, 
+    but are instead appended to info. Has access to all (state, action, reward, info) tuples  
+    so far in the episode.
+    """
+    def __init__(self, env, f):
+        self.env = env
+        super().__init__(self.env)
+        self.f = f # This is the feature constructor function.
+    
+    def reset(self): 
+        state = self.env.reset()
+        self.states, self.actions, self.rewards, self.infos = [state], [], [], []
+        return state
+
+    def step(self, action):
+        next_state, reward, done, info = self.env.step(action)
+        info_add = self.f(self.states, self.actions, self.rewards, self.infos)
+        return next_state, reward, done, {**info, **info_add}

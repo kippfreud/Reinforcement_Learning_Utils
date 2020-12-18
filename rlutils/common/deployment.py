@@ -17,10 +17,12 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         run = wandb.init(project=parameters["project_name"], monitor_gym=True, config={**agent.P, **parameters})
         run_name = run.name
         if train:
-            if parameters["model"] == "dqn": wandb.watch(agent.Q)
-            elif parameters["model"] in ("reinforce","actor-critic","ddpg","td3"): wandb.watch(agent.pi)
+            try:
+                if parameters["model"] == "dqn": wandb.watch(agent.Q)
+                elif parameters["model"] in ("reinforce","actor-critic","ddpg","td3"): wandb.watch(agent.pi)
+            except: pass
     else:
-        import time; run_name = "untitled_" + time.strftime("%Y-%m-%d_%H-%M-%S")
+        import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent:
@@ -29,6 +31,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         # Iterate through episodes.
         for ep in tqdm(range(parameters["num_episodes"])):
             render_this_ep = parameters["render_freq"] > 0 and ep % parameters["render_freq"] == 0
+            observe_this_ep = observer and parameters["observe_freq"] > 0 and ep % parameters["observe_freq"] == 0
             if parameters["save_video"] and render_this_ep: env = gym.wrappers.Monitor(env, f"./video/{run_name}/{ep}", force=True) # Record a new video every episode.
             state, reward_sum = env.reset(), 0
             
@@ -43,7 +46,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
                 action, extra = agent.act(state, explore=train) # If not in training mode, turn exploration off.
                 try: action_for_env = action.item() # If action is 1D, just extract its item().
                 except: action_for_env = action # Otherwise, keep the whole vector.
-                next_state, reward, done, _ = env.step(action_for_env)
+                next_state, reward, done, info = env.step(action_for_env)
                             
                 # Get state representation.
                 if done: next_state = None
@@ -54,9 +57,9 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
                     # Perform some agent-specific operations on each timestep.
                     agent.per_timestep(state, action, reward, next_state)
 
-                if observer:
+                if observe_this_ep:
                     # Send an observation to the observer.
-                    observer.observe(ep, t, state, action_for_env, reward, next_state, extra)
+                    observer.observe(ep, t, state, action_for_env, reward, next_state, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: env.render()

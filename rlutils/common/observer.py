@@ -2,6 +2,14 @@ import numpy as np
 import pandas as pd
 
 
+"""
+TODO: 
+    "mean" mode in .add_future()
+    .add_custom_dims(function, dim_names=[""])
+    .add_continuous_actions(mapping) - just a special case of the above?
+"""
+
+
 PROTECTED_DIM_NAMES = {"ep", "time", "reward", "pi", "Q", "V"}
 
 
@@ -19,12 +27,17 @@ class Observer:
         # Initialise empty dataset.
         self.data = []
 
-    def observe(self, ep, t, state, action, reward, next_state, extra):
+    def observe(self, ep, t, state, action, reward, next_state, info, extra):
+        """Make an observation of a single timestep."""
         # Basics: state, action and reward.
         observation = [ep, t] \
                     + list(state.numpy().flatten()) \
                     + list([action] if self.num_actions == 1 else list(action)) \
                     + [reward]
+        # Extra information produced by the environment in addition to the transition.
+        for k,v in info.items():
+            observation += [v]
+            if len(self.data) == 0: self.dim_names += [k]
         # Extra information produced by the agent in addition to its action.
         for k,v in extra.items():
             if type(v) == np.ndarray: v = list(v.flatten())
@@ -39,10 +52,37 @@ class Observer:
     def dataframe(self):
         return pd.DataFrame(self.data, columns=self.dim_names)
 
-    """
-    TODO: Methods for augmenting the dataset.
-        .add_continuous_actions(mapping)
-        .add_discounted_sums(dims=["reward"], gamma=0.99)
-        .add_custom_dims(function, dim_names=[""])
-        .add_derivatives(dims=["xxx"])
-    """
+    def add_future(self, dims, gamma, mode="sum", new_dims=None):
+        """
+        Add dimensions to the dataset corresponding to the discounted sum of existing ones.
+        """
+        self.data = np.array(self.data)
+        data_time = self.data[:,self.dim_names.index("time")]
+        data_dims = self.data[:,[self.dim_names.index(d) for d in dims]]
+        data_new_dims = np.zeros_like(data_dims)
+        terminal = True
+        for i, (t, x) in enumerate(reversed(list(zip(data_time, data_dims)))):
+            if terminal: data_new_dims[i] = x
+            else: data_new_dims[i] = x + (gamma * data_new_dims[i-1])
+            if t == 0: terminal = True
+            else: terminal = False
+        self.data = np.hstack((self.data, np.flip(data_new_dims, axis=0)))
+        if not new_dims: new_dims = [f"future_{mode}_{d}" for d in dims]
+        self.dim_names += new_dims
+
+    def add_derivatives(self, dims, new_dims=None): 
+        """
+        Add dimensions to the dataset corresponding to the change in existing dimensions
+        between successive timesteps.
+        """
+        self.data = np.array(self.data)
+        data_time = self.data[:,self.dim_names.index("time")]
+        data_dims = self.data[:,[self.dim_names.index(d) for d in dims]]
+        data_new_dims = np.zeros_like(data_dims)
+        for i in range(len(self.data)-1):
+            # NOTE: Just repeat last derivatives for terminal.
+            if data_time[i+1] == 0: data_new_dims[i] = data_new_dims[i-1]             
+            else: data_new_dims[i] = data_dims[i+1] - data_dims[i]
+        self.data = np.hstack((self.data, data_new_dims))
+        if not new_dims: new_dims = [f"d_{d}" for d in dims]
+        self.dim_names += new_dims

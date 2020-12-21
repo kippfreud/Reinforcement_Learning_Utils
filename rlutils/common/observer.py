@@ -22,7 +22,8 @@ class Observer:
         illegal = PROTECTED_DIM_NAMES & set(state_dim_names + action_dim_names)
         if illegal: raise ValueError(f"dim_names {illegal} already in use.")
         # List the dimensions in the dataset to be constructed.
-        self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names + ["reward"]
+        self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names + ["reward"] \
+                       + [f"n_{d}" for d in state_dim_names]
         self.num_actions = len(action_dim_names)
         # Initialise empty dataset.
         self.data, self.empty = [], True
@@ -30,22 +31,19 @@ class Observer:
     def observe(self, ep, t, state, action, reward, next_state, info, extra):
         """Make an observation of a single timestep."""
         if self.empty: extra_dim_names = []
-        # Basics: state, action and reward.
+        # Basics: state, action, reward, next_state.
         observation = [ep, t] \
                     + list(state.numpy().flatten()) \
                     + list([action] if self.num_actions == 1 else list(action)) \
-                    + [reward]
-        # Extra information produced by the environment in addition to the transition.
-        for k,v in info.items():
-            observation += [v]
-            if self.empty: extra_dim_names += [k]
-        # Extra information produced by the agent in addition to its action.
-        for k,v in extra.items():
-            if type(v) == np.ndarray: v = list(v.flatten())
-            else: v = [v]
+                    + [reward] \
+                    + list(next_state.flatten()) # Already in NumPy format.
+        # Dictionaries containing extra information produced by agent and environment.
+        for k,v in {**info, **extra}.items():
+            if type(v) == np.ndarray: v = list(v.flatten()); multi = True
+            else: v = [v]; multi = False
             observation += v
-            if self.empty:
-                if k in ("pi", "Q"): extra_dim_names += [f"{k}_{i}" for i in range(len(v))]
+            if self.empty: 
+                if multi: extra_dim_names += [f"{k}_{i}" for i in range(len(v))]
                 else: extra_dim_names += [k]
         self.data.append(observation)
         # Add extra dim names.

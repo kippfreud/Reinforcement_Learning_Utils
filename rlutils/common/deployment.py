@@ -47,22 +47,22 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
                 try: action_for_env = action.item() # If action is 1D, just extract its item().
                 except: action_for_env = action # Otherwise, keep the whole vector.
                 next_state, reward, done, info = env.step(action_for_env)
-                            
-                # Get state representation.
-                if done: next_state = None
-                elif renderer: next_state, last_screen = renderer.get_delta(last_screen)
-                else: next_state = torch.from_numpy(next_state).float().unsqueeze(0)
-                
-                if train:
-                    # Perform some agent-specific operations on each timestep.
-                    agent.per_timestep(state, action, reward, next_state)
 
+                # Send an observation to the observer if applicable.
                 if observe_this_ep:
-                    # Send an observation to the observer.
                     observer.observe(ep, t, state, action_for_env, reward, next_state, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: env.render()
+
+                # Get state representation.
+                if done: next_state = None
+                elif renderer: next_state, last_screen = renderer.get_delta(last_screen)
+                else: next_state = torch.from_numpy(next_state).float().unsqueeze(0)
+
+                if train:
+                    # Perform some agent-specific operations on each timestep.
+                    agent.per_timestep(state, action, reward, next_state)
 
                 # Update tracking variables and terminate episode if done.
                 reward_sum += reward

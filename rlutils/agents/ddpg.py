@@ -66,7 +66,7 @@ class DdpgAgent:
         """Deterministic action selection plus additive noise."""
         action = self.pi(state).detach().numpy()[0]
         if explore: return self.noise.get_action(action, self.total_t), {}
-        else: return action, {"Qa":None}
+        else: return action, {} # {"Qa":None}
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the pi and Q network parameters."""

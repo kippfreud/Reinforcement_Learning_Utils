@@ -2,6 +2,7 @@ from ..agents.stable_baselines import StableBaselinesAgent
 
 import torch 
 import gym
+import numpy as np
 from tqdm import tqdm
 
 
@@ -50,7 +51,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
 
                 # Send an observation to the observer if applicable.
                 if observe_this_ep:
-                    observer.observe(ep, t, state, action_for_env, reward, next_state, info, extra)
+                    observer.observe(ep, t, state, action_for_env, next_state, reward, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: env.render()
@@ -65,8 +66,8 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
                     agent.per_timestep(state, action, reward, next_state)
 
                 # Update tracking variables and terminate episode if done.
-                reward_sum += reward
-                if done: break
+                reward_sum += np.float64(reward).sum()
+                if done: print(reward); break
                 state = next_state
             
             if train:

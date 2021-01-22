@@ -17,34 +17,45 @@ class Observer:
     """
     This is a class for collecting observational data of an agent during deployment.
     """
-    def __init__(self, state_dim_names, action_dim_names):
+    def __init__(self, state_dim_names, action_dim_names, next_state=True, info=True):
         # Check for protected dim_names.
         illegal = PROTECTED_DIM_NAMES & set(state_dim_names + action_dim_names)
         if illegal: raise ValueError(f"dim_names {illegal} already in use.")
         # List the dimensions in the dataset to be constructed.
-        self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names + ["reward"] \
-                       + [f"n_{d}" for d in state_dim_names]
+        self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names \
+                       + ([f"n_{d}" for d in state_dim_names] if next_state else [])
         self.num_actions = len(action_dim_names)
+        self.next_state, self.info = next_state, info
         # Initialise empty dataset.
         self.data, self.empty = [], True
 
-    def observe(self, ep, t, state, action, reward, next_state, info, extra):
+    def observe(self, ep, t, state, action, next_state, reward, info, extra):
         """Make an observation of a single timestep."""
         if self.empty: extra_dim_names = []
-        # Basics: state, action, reward, next_state.
+        # Basics: state, action, next_state, reward.
         observation = [ep, t] \
                     + list(state.numpy().flatten()) \
                     + list([action] if self.num_actions == 1 else list(action)) \
-                    + [reward] \
-                    + list(next_state.flatten()) # Already in NumPy format.
-        # Dictionaries containing extra information produced by agent and environment.
-        for k,v in {**info, **extra}.items():
-            if type(v) == np.ndarray: v = list(v.flatten()); multi = True
-            else: v = [v]; multi = False
+                    + (list(next_state.flatten()) if self.next_state else []) # Already in NumPy format.
+        if type(reward) == np.ndarray:
+            observation += list(reward)
+            if self.empty: extra_dim_names += [f"reward_{i}" for i in range(len(reward))]   
+        else:
+            observation += [reward]
+            if self.empty: extra_dim_names.append("reward")            
+        # Dictionaries containing additional information produced by agent and environment.
+        for k,v in {**(info if self.info else {}), **extra}.items():
+            if type(v) == np.ndarray: 
+                shp = v.shape; v = list(v.flatten())
+            else: shp = False; v = [v]
             observation += v
             if self.empty: 
-                if multi: extra_dim_names += [f"{k}_{i}" for i in range(len(v))]
-                else: extra_dim_names += [k]
+                if shp: 
+                    if len(shp) > 1 and shp[1] > 1:
+                        extra_dim_names += [f"{k}_{i}_{j}" for i in range(shp[0]) for j in range(shp[1])]
+                    else:
+                        extra_dim_names += [f"{k}_{i}" for i in range(shp[0])]
+                else: extra_dim_names.append(k)
         self.data.append(observation)
         # Add extra dim names.
         if self.empty:

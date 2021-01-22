@@ -9,13 +9,13 @@ import torch.nn.functional as F
 
 
 DEFAULT_HYPERPARAMETERS = {
-    "replay_capacity": 50000,
+    "replay_capacity": 10000,
     "batch_size": 256,
     "lr_pi": 1e-4,
     "lr_Q": 1e-3,
     "gamma": 0.99,
     "tau": 0.01,
-    "noise_params": (0., 0.15, 0.1, 0.1, 100000),
+    "noise_params": (0., 0.15, 0.3, 0.3, 300000),
     "td3": True,
     "td3_noise_std": 0.2,
     "td3_noise_clip": 0.5,
@@ -64,9 +64,17 @@ class DdpgAgent:
     
     def act(self, state, explore=True):
         """Deterministic action selection plus additive noise."""
-        action = self.pi(state).detach().numpy()[0]
-        if explore: return self.noise.get_action(action, self.total_t), {}
-        else: return action, {} # {"Qa":None}
+        action_greedy = self.pi(state).detach().numpy()[0]
+        if explore: 
+            action = self.noise.get_action(action_greedy, self.total_t)
+            # Return greedy action and Q values in extra.
+            sa = self.sa_concat(state, torch.FloatTensor([action], device=self.device))
+            sa_greedy = self.sa_concat(state, torch.FloatTensor([action_greedy], device=self.device))
+            extra = {"action_greedy":action_greedy, "Q":self.Q(sa).item(), "Q_greedy":self.Q(sa_greedy).item()}
+            if self.P["td3"]:
+                extra["Q2"] = self.Q2(sa).item(); extra["Q2_greedy"] = self.Q2(sa_greedy).item()
+            return action, extra
+        else: return action_greedy, {} 
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the pi and Q network parameters."""
@@ -95,7 +103,7 @@ class DdpgAgent:
             next_Q2_values[nonterminal_mask] = self.Q2_target(self.sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
             next_Q_values = torch.min(next_Q_values, next_Q2_values)        
         # Compute target = reward + discounted Q_target(s', a').
-        Q_targets = (rewards + (self.P["gamma"] * next_Q_values))#.detach()
+        Q_targets = rewards + (self.P["gamma"] * next_Q_values)#.detach()
         # Update value in the direction of TD error. 
         self.optimiser_Q.zero_grad()
         Q_values = self.Q(self.sa_concat(states, actions)).squeeze()
@@ -138,7 +146,7 @@ class DdpgAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, torch.tensor([action], device=self.device), torch.tensor([reward], device=self.device), next_state)
+        self.memory.add(state, torch.FloatTensor([action], device=self.device), torch.FloatTensor([reward], device=self.device), next_state)
         losses = self.update_on_batch()
         if losses: self.ep_losses.append(losses)
         self.total_t += 1

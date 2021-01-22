@@ -2,7 +2,6 @@ from ..common.networks import SequentialNetwork
 
 import numpy as np
 import torch
-import torch.optim as optim
 from torch.distributions import Categorical
 import torch.nn.functional as F
 
@@ -24,12 +23,14 @@ class ActorCriticAgent:
         self.P = hyperparameters 
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi and V networks.
-        if len(state_shape) > 1: preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
-        else: preset_pi, preset_V = "CartPolePi_Vector", "CartPoleV_Vector"
-        self.pi = SequentialNetwork(preset=preset_pi, input_shape=state_shape, output_size=num_actions).to(self.device)
-        self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
-        self.V = SequentialNetwork(preset=preset_V, input_shape=state_shape, output_size=1).to(self.device)
-        self.optimiser_V = optim.Adam(self.V.parameters(), lr=self.P["lr_V"])
+        if len(state_shape) > 1: raise NotImplementedError()
+            # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
+        else:
+            net_code = [(state_shape[0], 64), "R", (64, 128), "R"]
+            net_code_pi = net_code + [(128, num_actions), "S"]
+            net_code_V = net_code + [(128, 1)] 
+        self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
+        self.V = SequentialNetwork(code=net_code_V, lr=self.P["lr_V"]).to(self.device)
         # Tracking variables.
         self.last_s_l_v = None # State, log prob action and value.
         self.ep_losses = []
@@ -52,18 +53,13 @@ class ActorCriticAgent:
         else: next_value = 0 # Handle terminal.
         # Calculate TD target and error.
         td_target = reward + (self.P["gamma"] * next_value)
-        td_error = (td_target - value).item() # NOTE: Is this the "advantage"?
-        # Zero gradient buffers of all parameters.
-        self.optimiser_pi.zero_grad(); self.optimiser_V.zero_grad()
+        td_error = (td_target - value).item() 
         # Update value in the direction of TD error using MSE loss.
         value_loss = F.mse_loss(value, td_target)
-        value_loss.backward()
-        # for param in self.V.parameters(): param.grad.data.clamp_(-1, 1) 
-        self.optimiser_V.step()
+        self.V.optimise(value_loss)
         # Update policy in the direction of log_prob(a) * TD error.
         policy_loss = -log_prob * td_error
-        policy_loss.backward() 
-        self.optimiser_pi.step() 
+        self.pi.optimise(policy_loss)
         return policy_loss.item(), value_loss.item()
 
     def per_timestep(self, state, action, reward, next_state):

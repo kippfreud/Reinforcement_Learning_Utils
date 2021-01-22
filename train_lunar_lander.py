@@ -6,7 +6,7 @@ train_parameters = {
     # * = Not used by StableBaselinesAgent.
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
-    "model": "td3",
+    "model": "sac",
     "num_episodes": 1000, # *
     "max_timesteps_per_episode": 500, # *
     "wandb_monitor": True, # *
@@ -35,6 +35,20 @@ if train_parameters["model"] in ("ddpg","td3"):
     }
     from rlutils.agents.ddpg import *
     agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
+
+# Make SacAgent.
+if train_parameters["model"] == "sac":
+    agent_parameters = {
+        "replay_capacity": 10000,
+        "batch_size": 256,
+        "lr_pi": 1e-4,
+        "lr_Q": 1e-3,
+        "gamma": 0.99,
+        "alpha": 0.2,
+        "tau": 0.01,
+    }
+    from rlutils.agents.sac import *
+    agent = SacAgent(env.observation_space.shape, env.action_space.shape[0], agent_parameters)
 
 # Make StableBaselinesAgent.
 elif train_parameters["model"] == "stable_baselines":

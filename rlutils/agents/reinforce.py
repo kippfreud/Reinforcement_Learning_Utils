@@ -2,7 +2,6 @@ from ..common.networks import SequentialNetwork
 
 import numpy as np
 import torch
-import torch.optim as optim
 from torch.distributions import Categorical
 import torch.nn.functional as F
 
@@ -25,13 +24,15 @@ class ReinforceAgent:
         self.P = hyperparameters 
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi network (and V if using advantage baselining).
-        if len(state_shape) > 1: preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
-        else: preset_pi, preset_V = "CartPolePi_Vector", "CartPoleV_Vector"
-        self.pi = SequentialNetwork(preset=preset_pi, input_shape=state_shape, output_size=num_actions).to(self.device)
-        self.optimiser_pi = optim.Adam(self.pi.parameters(), lr=self.P["lr_pi"])
+        if len(state_shape) > 1: raise NotImplementedError()
+            # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
+        else: 
+            net_code = [(state_shape[0], 64), "R", (64, 128), "R"]
+            net_code_pi = net_code + [(128, num_actions), "S"]
+            net_code_V = net_code + [(128, 1)] 
+        self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         if self.P["baseline"] == "adv":
-            self.V = SequentialNetwork(preset=preset_V, input_shape=state_shape, output_size=1).to(self.device)
-            self.optimiser_V = optim.Adam(self.V.parameters(), lr=self.P["lr_V"])
+            self.V = SequentialNetwork(code=net_code_V, lr=self.P["lr_V"]).to(self.device)
         else: self.V = None
         # Tracking variables.
         self.ep_predictions = [] # Log prob actions (and value).
@@ -61,21 +62,15 @@ class ReinforceAgent:
             g = reward + (self.P["gamma"] * g)
             returns.insert(0, g)
         returns = torch.tensor(returns, device=self.device)
-        # Zero gradient buffers of all parameters.
         if self.V is not None: 
             # Update value in the direction of advantage using MSE loss.
-            self.optimiser_V.zero_grad()
             log_probs, values = (torch.cat(x) for x in zip(*self.ep_predictions))
             value_loss = F.mse_loss(values, returns)
-            value_loss.backward()
-            # for param in self.V.parameters(): param.grad.data.clamp_(-1, 1) 
-            self.optimiser_V.step()
+            self.V.optimise(value_loss)
         else: log_probs, values, value_loss = torch.cat(self.ep_predictions), None, 0
         # Update policy in the direction of log_prob(a) * delta.
-        self.optimiser_pi.zero_grad()
         policy_loss = (-log_probs * self.baseline(returns, values)).sum()
-        policy_loss.backward() 
-        self.optimiser_pi.step()
+        self.pi.optimise(policy_loss)
         return policy_loss.item(), value_loss.item()
 
     def baseline(self, returns, values):

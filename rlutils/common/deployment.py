@@ -67,7 +67,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
 
                 # Update tracking variables and terminate episode if done.
                 reward_sum += np.float64(reward).sum()
-                if done: print(reward); break
+                if done: break
                 state = next_state
             
             if train:

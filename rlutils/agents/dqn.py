@@ -4,7 +4,6 @@ from ..common.memory import ReplayMemory
 import random
 import numpy as np
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
 
 
@@ -24,23 +23,24 @@ class DqnAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,
-                 reward_components=1,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 reward_components=1
                  ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         # Create Q network.
-        if len(state_shape) > 1: preset = "CartPoleQ_Pixels"
-        else: preset = "CartPoleQ_Vector"
-        self.Q = SequentialNetwork(preset=preset, input_shape=state_shape, output_size=num_actions*reward_components).to(self.device)
-        self.Q_target = SequentialNetwork(preset=preset, input_shape=state_shape, output_size=num_actions*reward_components).to(self.device)
+        if len(state_shape) > 1: raise NotImplementedError()
+            # preset = "CartPoleQ_Pixels"
+        else: 
+            # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
+            net_code = [(state_shape[0], 256), "R", (256, 128), "R", (128, 64), "R", (64, num_actions*reward_components)]
+        self.Q = SequentialNetwork(code=net_code, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
+        self.Q_target = SequentialNetwork(code=net_code, eval_only=True).to(self.device)
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
-        self.Q_target.eval() # Turn off training mode for target net.
         self.num_actions = num_actions
         self.reward_components = reward_components
-        self.optimiser = optim.Adam(self.Q.parameters(), lr=self.P["lr_Q"])
         # Create replay memory.
-        self.memory = ReplayMemory(self.P["replay_capacity"])
+        self.memory = ReplayMemory(self.P["replay_capacity"], ("state", "action", "reward", "next_state")) 
         # Tracking variables.
         self.epsilon = self.P["epsilon_start"]
         self.total_t = 0 # Used for epsilon decay.
@@ -57,7 +57,6 @@ class DqnAgent:
             # ===================
             #
             if self.reward_components > 1: Q = Q.sum(axis=1).reshape(-1,1)
-                # print(Q.shape)
             #
             # ===================
             #
@@ -92,9 +91,7 @@ class DqnAgent:
         nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
         # Use target network to compute Q_target(s', a') for each nonterminal next state.
         # a' is chosen to be the maximising action from s'.
-        next_Q_values = torch.zeros([self.P["batch_size"]] + \
-                        ([self.reward_components] if self.reward_components > 1 else []), 
-                        device=self.device)
+        next_Q_values = torch.zeros((self.P["batch_size"], self.reward_components), device=self.device)
         # 
         # ===================
         #
@@ -102,22 +99,21 @@ class DqnAgent:
         if self.reward_components > 1: 
             Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.num_actions, -1)
             actions_next = Q_t_n.sum(axis=2).max(1)[1].detach()
-        else: actions_next = Q_t_n.max(1)[1].detach()
+        else: 
+            actions_next = Q_t_n.max(1)[1].detach()
+            Q_t_n = Q_t_n.unsqueeze(-1)
+            rewards = rewards.unsqueeze(-1)
+            Q_values = Q_values.unsqueeze(-1)
         #
         # ===================
         #
         next_Q_values[nonterminal_mask] = Q_t_n[torch.arange(Q_t_n.shape[0]), actions_next, :]        
         # Compute target = reward + discounted Q_target(s', a').
         Q_targets = rewards + (self.P["gamma"] * next_Q_values)
-        # Zero gradient buffers of all parameters.
-        self.optimiser.zero_grad() 
         # Update value in the direction of TD error using Huber loss. 
         # See https://en.wikipedia.org/wiki/Huber_loss.
         loss = F.smooth_l1_loss(Q_values, Q_targets)
-        loss.backward() 
-        for param in self.Q.parameters():
-            param.grad.data.clamp_(-1, 1) # Implement gradient clipping.
-        self.optimiser.step()
+        self.Q.optimise(loss)
         # Periodically clone target.
         self.updates_since_target_clone += 1
         if self.updates_since_target_clone >= self.P["updates_between_target_clone"]:
@@ -139,4 +135,4 @@ class DqnAgent:
         if self.ep_losses: mean_loss = np.mean(self.ep_losses)
         else: mean_loss = 0.
         del self.ep_losses[:]
-        return {"logs":{"epsilon": self.epsilon, "value_loss": mean_loss}}
+        return {"logs":{"value_loss": mean_loss, "epsilon": self.epsilon}}

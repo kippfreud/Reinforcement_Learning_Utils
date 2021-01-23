@@ -20,7 +20,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         if train:
             try:
                 if parameters["model"] == "dqn": wandb.watch(agent.Q)
-                elif parameters["model"] in ("reinforce","actor-critic","ddpg","td3"): wandb.watch(agent.pi)
+                elif parameters["model"] in ("reinforce","actor-critic","ddpg","td3","sac"): wandb.watch(agent.pi)
             except: pass
     else:
         import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")

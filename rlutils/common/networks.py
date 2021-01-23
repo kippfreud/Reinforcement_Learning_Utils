@@ -21,9 +21,9 @@ class SequentialNetwork(nn.Module):
 
     def forward(self, x): return self.layers(x)
 
-    def optimise(self, loss): 
+    def optimise(self, loss, retain_graph=False): 
         self.optimiser.zero_grad()
-        loss.backward(retain_graph=True) 
+        loss.backward(retain_graph=retain_graph) 
         if self.clip_grads: # Optional gradient clipping.
             for param in self.parameters(): param.grad.data.clamp_(-1, 1) 
         self.optimiser.step()

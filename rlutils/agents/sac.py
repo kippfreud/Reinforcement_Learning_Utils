@@ -36,7 +36,7 @@ class SacAgent:
         self.Q, self.Q_target = self._make_Q(net_code_Q)
         self.Q2, self.Q2_target = self._make_Q(net_code_Q)
         # Create replay memory.
-        self.memory = ReplayMemory(self.P["replay_capacity"], ("state", "action", "reward", "next_state")) 
+        self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Tracking variables.   
         self.ep_losses = []  
     

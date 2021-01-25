@@ -40,7 +40,7 @@ class DqnAgent:
         self.num_actions = num_actions
         self.reward_components = reward_components
         # Create replay memory.
-        self.memory = ReplayMemory(self.P["replay_capacity"], ("state", "action", "reward", "next_state")) 
+        self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Tracking variables.
         self.epsilon = self.P["epsilon_start"]
         self.total_t = 0 # Used for epsilon decay.

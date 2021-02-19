@@ -80,7 +80,6 @@ class SacAgent:
         Q_values_new = torch.min( 
             self.Q(_sa_concat(states, actions_new.detach())).squeeze(),
             self.Q2(_sa_concat(states, actions_new.detach())).squeeze()) # Again use the clipped double Q trick.  
-        # print(Q_values_new.shape, log_probs_new.shape)
         # Update policy in the direction of increasing value according to self.Q (the policy gradient), plus entropy regularisation.
         policy_loss = ((self.P["alpha"] * log_probs_new) - Q_values_new).mean()
         self.pi.optimise(policy_loss)

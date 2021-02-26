@@ -69,8 +69,8 @@ class SimpleModelBasedAgent:
         else: # After random mode, sample from both memories according to self.batch_split.
             if len(self.memory) < self.batch_split[0]: return 
             batch = list(self.memory.sample(self.batch_split[0])) + list(self.random_memory.sample(self.batch_split[1]))
-        states_and_actions = torch.cat(tuple(torch.cat((x.state, torch.Tensor([[x.action]])), dim=-1) for x in batch), dim=0)
-        next_states = torch.cat(tuple(x.next_state for x in batch))
+        states_and_actions = torch.cat(tuple(torch.cat((x.state, torch.Tensor([[x.action]]).to(self.device)), dim=-1) for x in batch), dim=0)
+        next_states = torch.cat(tuple(x.next_state for x in batch)).to(self.device)
         # Update model in the direction of the true change in state using MSE loss.
         target = next_states - states_and_actions[:,:-1]
         prediction = self.model(states_and_actions)
@@ -80,12 +80,15 @@ class SimpleModelBasedAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
+        state = state.to(self.device)
+        #action = torch.tensor([action]).float().to(self.device)
+        reward = torch.tensor([reward]).float().to(self.device)
         if self.random_mode and len(self.random_memory) >= self.P["random_replay_capacity"]: 
             self.random_mode = False
             print("Random data collection complete.")
         if next_state != None: 
-            if self.random_mode: self.random_memory.add(state, action, torch.FloatTensor([reward], device=self.device), next_state)
-            else: self.memory.add(state, action, torch.FloatTensor([reward], device=self.device), next_state)
+            if self.random_mode: self.random_memory.add(state, action, reward, next_state)
+            else: self.memory.add(state, action, reward, next_state)
         if self.total_t % self.P["steps_between_update"] == 0:
             loss = self.update_on_batch()
             if loss: self.ep_losses.append(loss)
@@ -103,11 +106,11 @@ class SimpleModelBasedAgent:
         Then select the first action from the rollout with maximum return."""
         returns = []; first_actions = []
         for _ in range(self.P["num_rollouts"]):
-            rollout_state, rollout_return = state[0].detach().clone(), 0
+            rollout_state, rollout_return = state[0].detach().clone().to(self.device), 0
             for t in range(self.P["rollout_horizon"]):
                 rollout_action = self.action_space.sample() # Random action selection.
                 if t == 0: first_actions.append(rollout_action)               
-                rollout_state += self.model(torch.cat((rollout_state, torch.Tensor([rollout_action]))))
+                rollout_state += self.model(torch.cat((rollout_state, torch.Tensor([rollout_action]).to(self.device))).to(self.device))
                 rollout_return += (self.P["gamma"] ** t) * self.reward_function(rollout_state)                
             returns.append(rollout_return)
         return returns, first_actions

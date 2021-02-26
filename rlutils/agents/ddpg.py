@@ -8,13 +8,13 @@ import torch.nn.functional as F
 
 
 DEFAULT_HYPERPARAMETERS = {
-    "replay_capacity": 10000,
+    "replay_capacity": 50000,
     "batch_size": 128,
     "lr_pi": 1e-4,
     "lr_Q": 1e-3,
     "gamma": 0.99,
     "tau": 0.005,
-    "noise_params": (0., 0.15, 0.3, 0.3, 300000),
+    "noise_params": (0., 0.15, 0.3, 0.3, 1000),
     "td3": True,
     "td3_noise_std": 0.2,
     "td3_noise_clip": 0.5,

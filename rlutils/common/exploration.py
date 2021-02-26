@@ -1,22 +1,21 @@
 import numpy as np
 
 
-
 class OUNoise(object):
     """
-    Time-correlated noise using the Ornstein-Ulhenbeck process.
+    Time-correlated noise for continuous actions using the Ornstein-Ulhenbeck process.
     Taken from https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
     """
-    def __init__(self, action_space, mu, theta=0.15, max_sigma=0.3, min_sigma=0.3, decay_period=100000):
+    def __init__(self, action_space, mu, theta=0.15, max_sigma=0.3, min_sigma=0.3, decay_period=1000):
         self.mu           = mu
         self.theta        = theta
-        self.sigma        = max_sigma
+        self.sigma        = max_sigma 
         self.max_sigma    = max_sigma
         self.min_sigma    = min_sigma
         self.decay_period = decay_period
         self.action_dim   = action_space.shape[0]
-        self.low          = action_space.low
-        self.high         = action_space.high
+        self.low          = -1 # action_space.low # NOTE: Just use [-1,1] if applying NormaliseActionWrapper to env.
+        self.high         = 1 # action_space.high
         self.reset()
         
     def reset(self):
@@ -27,8 +26,29 @@ class OUNoise(object):
         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(self.action_dim)
         self.state = x + dx
         return self.state
+
+    def decay(self, k):
+        self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, k / self.decay_period)
     
-    def get_action(self, action, t=0):
+    def get_action(self, action):
         ou_state = self.evolve_state()
-        self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, t / self.decay_period)
         return np.clip(action + ou_state, self.low, self.high)
+
+
+class UniformNoise(object):
+    """
+    Weighted averaging with random uniform noise. Use sigma as parameter for consistency with above.
+    """
+    def __init__(self, action_space, max_sigma=1, min_sigma=0, decay_period=1000):
+        self.action_space = action_space
+        self.sigma        = max_sigma
+        self.max_sigma    = max_sigma
+        self.min_sigma    = min_sigma
+        self.decay_period = decay_period
+
+    def decay(self, k):
+        self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, k / self.decay_period)
+
+    def get_action(self, action):
+        action_rand = self.action_space.sample()
+        return (action * (1-self.sigma)) + (action_rand * self.sigma)

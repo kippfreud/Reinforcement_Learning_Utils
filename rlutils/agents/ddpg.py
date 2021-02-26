@@ -1,6 +1,6 @@
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
-from ..common.exploration import OUNoise
+from ..common.exploration import OUNoise, UniformNoise
 
 import numpy as np
 import torch
@@ -26,16 +26,19 @@ class DdpgAgent:
     def __init__(self, 
                  state_shape,
                  action_space, 
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 net_code_pi=None,
+                 net_code_Q=None
                  ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         num_actions = action_space.shape[0]
         # Create pi and Q networks.
-        if len(state_shape) > 1: raise NotImplementedError()
-        else: 
-            net_code_pi = [(state_shape[0], 256), "R", (256, 256), "R", (256, num_actions), "T"]
-            net_code_Q = [(state_shape[0]+num_actions, 256), "R", (256, 256), "R", (256, 1)]
+        if net_code_pi is None:
+            if len(state_shape) > 1: raise NotImplementedError()
+            else: 
+                net_code_pi = [(state_shape[0], 256), "R", (256, 256), "R", (256, num_actions), "T"]
+                net_code_Q = [(state_shape[0]+num_actions, 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.pi_target = SequentialNetwork(code=net_code_pi, eval_only=True).to(self.device)
         self.pi_target.load_state_dict(self.pi.state_dict()) # Clone.
@@ -46,16 +49,18 @@ class DdpgAgent:
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Create noise process for exploration.
-        self.noise = OUNoise(action_space, *self.P["noise_params"])
+        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(action_space, *self.P["noise_params"][1:])
         # Tracking variables.   
-        self.total_t = 0 # Used for noise decay (and policy update frequency for TD3).
+        self.total_ep = 0 # Used for noise decay.
+        self.total_t = 0 # Used for policy update frequency for TD3.
         self.ep_losses = []  
     
     def act(self, state, explore=True):
         """Deterministic action selection plus additive noise."""
         action_greedy = self.pi(state).detach().numpy()[0]
         if explore: 
-            action = self.noise.get_action(action_greedy, self.total_t)
+            action = self.noise.get_action(action_greedy)
             # Return greedy action and Q values in extra.
             sa = _sa_concat(state, torch.FloatTensor([action], device=self.device))
             sa_greedy = _sa_concat(state, torch.FloatTensor([action_greedy], device=self.device))
@@ -131,7 +136,8 @@ class DdpgAgent:
         """Operations to perform on each episode end during training."""
         if self.ep_losses: mean_policy_loss, mean_value_loss = np.nanmean(self.ep_losses, axis=0)
         else: mean_policy_loss, mean_value_loss = 0., 0.
-        del self.ep_losses[:]
+        self.noise.decay(self.total_ep)
+        del self.ep_losses[:]; self.total_ep += 1
         return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.noise.sigma}}
 
     def _make_Q(self, net_code_Q):

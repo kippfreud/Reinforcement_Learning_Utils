@@ -3,15 +3,15 @@ from rlutils.common.deployment import train
 import gym
 
 train_parameters = {
-    "project_name": "cartpole",
-    "env": "CartPole-v1",
+    "project_name": "pong",
+    "env": "Pong-v0",
     "model": "dqn",
     "num_episodes": 10000,
     "max_timesteps_per_episode": 500,
     "from_pixels": True,
     "wandb_monitor": True,
     "render_freq": 0,
-    "save_video": True,
+    "save_video": False,
     "save_final_agent": False,
 }
 
@@ -20,10 +20,10 @@ env = gym.make(train_parameters["env"]).unwrapped
 if train_parameters["from_pixels"]:
     # If from_pixels, set up screen processor.
     from rlutils.common.rendering import Renderer
-    from rlutils.specific.CartPole import screen_processor # <<< NOTE: HARD CODED FOR CARTPOLE!
+    from rlutils.specific.Pong import screen_processor # <<< NOTE: HARD CODED FOR PONG!
     env.reset()
     renderer = Renderer(env, screen_processor, mode="diff")
-    renderer.get(first=True); env.step(0); s = renderer.get(show=False)
+    renderer.get(first=True); env.step(0); s = renderer.get(show=True)
     state_shape = s.shape
 else: state_shape, renderer = env.observation_space.shape, None
 

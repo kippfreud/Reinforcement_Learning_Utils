@@ -29,14 +29,17 @@ class DqnAgent:
                  ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
+        # Create Q network.
         if net_code is None:
-            if len(state_shape) > 1: raise NotImplementedError()
+            if len(state_shape) > 1: 
+                net_preset = "CartPoleQ_Pixels"
+                net_code, input_shape, output_size = None, state_shape, num_actions*reward_components
             else: 
                 # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
                 net_code = [(state_shape[0], 256), "R", (256, 128), "R", (128, 64), "R", (64, num_actions*reward_components)]
-        # Create Q network.
-        self.Q = SequentialNetwork(code=net_code, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
-        self.Q_target = SequentialNetwork(code=net_code, eval_only=True).to(self.device)
+                net_preset, input_shape, output_size = None, None, None
+        self.Q = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
+        self.Q_target = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, eval_only=True).to(self.device)
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
         self.num_actions = num_actions
         self.reward_components = reward_components

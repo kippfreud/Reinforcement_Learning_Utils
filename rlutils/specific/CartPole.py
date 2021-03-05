@@ -14,8 +14,8 @@ resize = T.Compose([T.ToPILImage(), # Convert a tensor or an ndarray to PIL Imag
 def screen_processor(screen, env):
     # Cart is in the lower half, so strip off the top and bottom of the screen
     _, screen_height, screen_width = screen.shape
-    screen = screen[:, int(screen_height*0.4) : int(screen_height*0.8)]
-    view_width = int(screen_width * 0.25)
+    screen = screen[:, int(screen_height*0.415) : int(screen_height*0.8)]
+    view_width = int(screen_width * 0.1)
     # Use the provided state representation to get the cart position in pixels.
     scale = screen_width / (env.x_threshold * 2) # Divide by world width.
     cart_location = int(env.state[0] * scale + screen_width / 2.0) 

@@ -6,9 +6,9 @@ train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
     "model": "dqn",
-    "num_episodes": 2000,
+    "num_episodes": 10000,
     "max_timesteps_per_episode": 500,
-    "from_pixels": False,
+    "from_pixels": True,
     "wandb_monitor": True,
     "render_freq": 0,
     "save_video": False,
@@ -22,44 +22,45 @@ if train_parameters["from_pixels"]:
     from rlutils.common.rendering import Renderer
     from rlutils.specific.CartPole import screen_processor # <<< NOTE: HARD CODED FOR CARTPOLE!
     env.reset()
-    renderer = Renderer(env, screen_processor)
-    state_shape = renderer.get_screen().shape
+    renderer = Renderer(env, screen_processor, mode="diff")
+    renderer.get(first=True); env.step(0); s = renderer.get(show=True)
+    state_shape = s.shape
 else: state_shape, renderer = env.observation_space.shape, None
 
-# Make DqnAgent.
-if train_parameters["model"] == "dqn":
-    agent_parameters = {
-        "replay_capacity": 10000,
-        "batch_size": 128,
-        "lr_Q": 1e-3,
-        "gamma": 0.99,
-        "epsilon_start": 0.9,
-        "epsilon_end": 0.05,
-        "epsilon_decay": 10000,
-        "updates_between_target_clone": 2000
-    }
-    from rlutils.agents.dqn import *
-    agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)
+# # Make DqnAgent.
+# if train_parameters["model"] == "dqn":
+#     agent_parameters = {
+#         "replay_capacity": 50000,
+#         "batch_size": 32,
+#         "lr_Q": 1e-3,
+#         "gamma": 0.99,
+#         "epsilon_start": 1,
+#         "epsilon_end": 0.05,
+#         "epsilon_decay": 100000,
+#         "updates_between_target_clone": 2000
+#     }
+#     from rlutils.agents.dqn import *
+#     agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)
 
-# Make ReinforceAgent.
-elif train_parameters["model"] == "reinforce":
-    agent_parameters = {
-        "lr_pi": 1e-4,
-        "lr_V": 1e-3,
-        "gamma": 0.99,
-        "baseline": "adv"
-    }   
-    from rlutils.agents.reinforce import *
-    agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters)
+# # Make ReinforceAgent.
+# elif train_parameters["model"] == "reinforce":
+#     agent_parameters = {
+#         "lr_pi": 1e-4,
+#         "lr_V": 1e-3,
+#         "gamma": 0.99,
+#         "baseline": "adv"
+#     }   
+#     from rlutils.agents.reinforce import *
+#     agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters)
 
-# Make ActorCriticAgent.
-elif train_parameters["model"] == "actor-critic":
-    agent_parameters = {
-        "lr_pi": 1e-4,
-        "lr_V": 1e-3,
-        "gamma": 0.99
-    }   
-    from rlutils.agents.actor_critic import *
-    agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
+# # Make ActorCriticAgent.
+# elif train_parameters["model"] == "actor-critic":
+#     agent_parameters = {
+#         "lr_pi": 1e-4,
+#         "lr_V": 1e-3,
+#         "gamma": 0.99
+#     }   
+#     from rlutils.agents.actor_critic import *
+#     agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
 
-run_name = train(agent, env, train_parameters, renderer)
+# run_name = train(agent, env, train_parameters, renderer)

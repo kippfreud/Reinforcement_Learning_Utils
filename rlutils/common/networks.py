@@ -28,6 +28,7 @@ class SequentialNetwork(nn.Module):
             for param in self.parameters(): param.grad.data.clamp_(-1, 1) 
         self.optimiser.step()
 
+
 # class MultiHeadedNetwork(nn.Module):
 #     def __init__(self, common=None, heads=None, preset=None, input_shape=None, output_size=None):
 #         super(MultiHeadedNetwork, self).__init__() 

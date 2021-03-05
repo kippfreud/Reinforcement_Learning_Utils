@@ -1,23 +1,26 @@
 from threading import Event, Thread
 import matplotlib.pyplot as plt
 
-
 class Renderer:
-    def __init__(self, env, processor):
+    def __init__(self, env, processor, mode="diff", params={"prev_alpha": 1}):
         self.thread = RenderThread(env)
         self.thread.start()
         self.processor = processor
+        self.mode = mode
+        self.P = params
 
-    def get_screen(self):
-        # Returned screen requested by gym is in (height, width, channel) order.
-        # Transpose it into torch order (channel, height, width).
+    def get(self, first=False, show=False):
         self.thread.begin_render()
-        raw = self.thread.get_screen().transpose((2, 0, 1))
-        return self.processor(raw, self.thread.env)
-
-    def get_delta(self, last_screen, last_alpha=1):
-        current_screen = self.get_screen()
-        return current_screen - last_screen * last_alpha, current_screen
+        # Gym screen is in (height, width, channel) order. Transpose into torch order (channel, height, width).
+        screen = self.processor(self.thread.get_screen().transpose((2, 0, 1)), self.thread.env)
+        if self.mode == "current": output = screen
+        elif self.mode == "diff":
+            # Diff mode: take difference between current and (prev screen * prev_alpha)
+            if first: self.prev_screen = screen
+            output = screen - (self.prev_screen * self.P["prev_alpha"])
+            if not first: self.prev_screen = screen
+        if show: plt.imshow(self.to_numpy(output)); plt.show()
+        return output
 
     def to_numpy(_, screen):
         image = screen.cpu().squeeze(0).permute(1, 2, 0).numpy()

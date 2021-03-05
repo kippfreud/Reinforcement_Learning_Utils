@@ -37,7 +37,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
             state, reward_sum = env.reset(), 0
             
             # Get state representation.
-            if renderer: state, last_screen = renderer.get_delta(renderer.get_screen())
+            if renderer: state = renderer.get(first=True)
             else: state = torch.from_numpy(state).float().unsqueeze(0)
             
             # Iterate through timesteps.
@@ -58,7 +58,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
 
                 # Get state representation.
                 if done: next_state = None
-                elif renderer: next_state, last_screen = renderer.get_delta(last_screen)
+                elif renderer: next_state = renderer.get()
                 else: next_state = torch.from_numpy(next_state).float().unsqueeze(0)
 
                 if train:

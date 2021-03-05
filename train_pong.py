@@ -6,7 +6,7 @@ train_parameters = {
     "project_name": "pong",
     "env": "Pong-v0",
     "model": "dqn",
-    "num_episodes": 100000,
+    "num_episodes": 200,
     "max_timesteps_per_episode": 1000000,
     "from_pixels": True,
     "wandb_monitor": True,

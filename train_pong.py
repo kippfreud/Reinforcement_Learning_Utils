@@ -6,8 +6,8 @@ train_parameters = {
     "project_name": "pong",
     "env": "Pong-v0",
     "model": "dqn",
-    "num_episodes": 10000,
-    "max_timesteps_per_episode": 500,
+    "num_episodes": 100000,
+    "max_timesteps_per_episode": 1000000,
     "from_pixels": True,
     "wandb_monitor": True,
     "render_freq": 0,
@@ -22,15 +22,15 @@ if train_parameters["from_pixels"]:
     from rlutils.common.rendering import Renderer
     from rlutils.specific.Pong import screen_processor # <<< NOTE: HARD CODED FOR PONG!
     env.reset()
-    renderer = Renderer(env, screen_processor, mode="diff")
-    renderer.get(first=True); env.step(0); s = renderer.get(show=True)
+    renderer = Renderer(env, screen_processor, mode="diff", params={"prev_alpha": 0.5})
+    renderer.get(first=True); env.step(0); s = renderer.get(show=False)
     state_shape = s.shape
 else: state_shape, renderer = env.observation_space.shape, None
 
 # Make DqnAgent.
 if train_parameters["model"] == "dqn":
     agent_parameters = {
-        "replay_capacity": 50000,
+        "replay_capacity": 500000,
         "batch_size": 32,
         "lr_Q": 1e-3,
         "gamma": 0.99,

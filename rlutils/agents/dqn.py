@@ -54,7 +54,7 @@ class DqnAgent:
     def act(self, state, explore=True):
         """Epsilon-greedy action selection."""
         Q = self.Q(state).reshape(self.num_actions,-1)
-        extra = {"Q": Q.detach().numpy()}
+        extra = {"Q": Q.cpu().detach().numpy()}
         if (not explore) or random.random() > self.epsilon:
             # If using decomposed rewards, need to take sum.
             #
@@ -127,7 +127,7 @@ class DqnAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, action, torch.FloatTensor([reward], device=self.device), next_state)
+        self.memory.add(state, action, torch.tensor([reward]).float().to(self.device), next_state)
         loss = self.update_on_batch()
         if loss: self.ep_losses.append(loss)
         self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \

@@ -9,7 +9,7 @@ train_parameters = {
     "num_episodes": 100000,
     "max_timesteps_per_episode": 1000000,
     "from_pixels": True,
-    "wandb_monitor": False,
+    "wandb_monitor": True,
     "render_freq": 0,
     "save_video": False,
     "save_final_agent": False,

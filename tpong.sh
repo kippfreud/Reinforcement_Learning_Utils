@@ -6,4 +6,4 @@
 #SBATCH --mem=16G
 #SBATCH --job-name=train_pong
 echo "Training on Pong..."
-python3 train_pong.py > train_pong.out
+python train_pong.py

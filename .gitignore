@@ -3,3 +3,4 @@ video/**
 saved_runs/**
 __pycache__/
 .idea/
+*.out

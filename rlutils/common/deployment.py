@@ -6,42 +6,48 @@ import numpy as np
 from tqdm import tqdm
 
 
-def train(agent, env, parameters, renderer=None, observer=None):
-    return deploy(agent, env, parameters, True, renderer, observer)
+def train(agent, env, P, renderer=None, observer=None):
+    return deploy(agent, env, P, True, renderer, observer)
 
-def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
+def deploy(agent, env, P, train=False, renderer=None, observer=None):
 
     # Initialise weights and biases monitoring.
-    if parameters["wandb_monitor"]: 
+    if P["wandb_monitor"]: 
         assert not type(agent)==StableBaselinesAgent, "wandb monitoring not implemented for StableBaselinesAgent."
         import wandb
-        run = wandb.init(project=parameters["project_name"], monitor_gym=True, config={**agent.P, **parameters})
+        run = wandb.init(project=P["project_name"], monitor_gym=True, config={**agent.P, **P})
         run_name = run.name
         if train:
             try:
-                if parameters["model"] == "dqn": wandb.watch(agent.Q)
-                elif parameters["model"] in ("reinforce","actor-critic","ddpg","td3","sac"): wandb.watch(agent.pi)
+                if P["model"] == "dqn": wandb.watch(agent.Q)
+                elif P["model"] in ("reinforce","actor-critic","ddpg","td3","sac"): wandb.watch(agent.pi)
             except: pass
     else:
         import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")
 
+    # Add wrappers to environment.
+    if P["episode_time_limit"]: # Time limit.
+        env = gym.wrappers.TimeLimit(env, P["episode_time_limit"])
+    if P["video_save_freq"] > 0: # Video recording. NOTE: Must put this last.
+        env = gym.wrappers.Monitor(env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
+
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent:
-        agent.train(parameters["sb_parameters"])
+        agent.train(P["sb_parameters"])
     else:
         # Iterate through episodes.
-        for ep in tqdm(range(parameters["num_episodes"])):
-            render_this_ep = parameters["render_freq"] > 0 and ep % parameters["render_freq"] == 0
-            observe_this_ep = observer and parameters["observe_freq"] > 0 and ep % parameters["observe_freq"] == 0
-            if parameters["save_video"] and render_this_ep: env = gym.wrappers.Monitor(env, f"./video/{run_name}/{ep}", force=True) # Record a new video every episode.
-            state, reward_sum = env.reset(), 0
+        for ep in tqdm(range(P["num_episodes"])):
+            render_this_ep = P["render_freq"] > 0 and ep % P["render_freq"] == 0
+            observe_this_ep = observer and P["observe_freq"] > 0 and ep % P["observe_freq"] == 0
+            # if P["save_video"] and render_this_ep: env = gym.wrappers.Monitor(env, f"./video/{run_name}/{ep}", force=True) # Record a new video every rendered episode.
+            state, reward_sum, t, done = env.reset(), 0, 0, False
             
             # Get state representation.
             if renderer: state = renderer.get(first=True)
             else: state = torch.from_numpy(state).float().unsqueeze(0)
             
             # Iterate through timesteps.
-            for t in range(parameters["max_timesteps_per_episode"]): 
+            while not done:
                 
                 # Get action and advance state.
                 action, extra = agent.act(state, explore=train) # If not in training mode, turn exploration off.
@@ -65,10 +71,10 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
                     # Perform some agent-specific operations on each timestep.
                     agent.per_timestep(state, action, reward, next_state)
 
-                # Update tracking variables and terminate episode if done.
+                # Update tracking variables.
                 reward_sum += np.float64(reward).sum()
-                if done: break
                 state = next_state
+                t += 1
             
             if train:
                 # Perform some agent-specific operations on each episode.
@@ -76,7 +82,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
             else: results = {"logs":{}}  
 
             # Log to weights and biases.
-            if parameters["wandb_monitor"]: 
+            if P["wandb_monitor"]: 
                 results["logs"]["reward_sum"] = reward_sum
                 wandb.log(results["logs"])
 
@@ -85,7 +91,7 @@ def deploy(agent, env, parameters, train=False, renderer=None, observer=None):
         env.close()
 
     # Save final agent if requested.
-    if parameters["save_final_agent"]:
+    if P["save_final_agent"]:
         if type(agent)==StableBaselinesAgent: 
             agent.save(f"saved_runs/{run_name}") 
         else:

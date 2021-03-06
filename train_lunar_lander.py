@@ -7,11 +7,11 @@ train_parameters = {
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
     "model": "sac",
-    "num_episodes": 1000, # *
-    "max_timesteps_per_episode": 500, # *
-    "wandb_monitor": True, # *
+    "num_episodes": 1, # *
+    "episode_time_limit": 200, # *
+    "wandb_monitor": False, # *
     "render_freq": 0,
-    "save_video": False,
+    "video_save_freq": 0,
     "save_final_agent": False,
 }
 

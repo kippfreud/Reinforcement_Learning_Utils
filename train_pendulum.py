@@ -8,11 +8,11 @@ train_parameters = {
     "env": "Pendulum-v0",
     "model": "sac",
     "num_episodes": 100,
-    "max_timesteps_per_episode": 500,
+    "episode_time_limit": 500,
     # "from_pixels": False,
     "wandb_monitor": False,
     "render_freq": 0,
-    "save_video": False,
+    "video_save_freq": 0,
     "save_final_agent": False,
 }
 

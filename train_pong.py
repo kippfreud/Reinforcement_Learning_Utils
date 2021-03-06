@@ -6,12 +6,12 @@ train_parameters = {
     "project_name": "pong",
     "env": "Pong-v0",
     "model": "dqn",
-    "num_episodes": 200,
-    "max_timesteps_per_episode": 1000000,
+    "num_episodes": 100,
+    "episode_time_limit": 20,
     "from_pixels": True,
-    "wandb_monitor": True,
+    "wandb_monitor": False,
     "render_freq": 0,
-    "save_video": False,
+    "video_save_freq": 10,
     "save_final_agent": False,
 }
 

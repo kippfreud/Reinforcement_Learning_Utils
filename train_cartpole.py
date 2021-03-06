@@ -7,11 +7,11 @@ train_parameters = {
     "env": "CartPole-v1",
     "model": "dqn",
     "num_episodes": 10000,
-    "max_timesteps_per_episode": 500,
+    "episode_time_limit": 500,
     "from_pixels": True,
     "wandb_monitor": True,
     "render_freq": 0,
-    "save_video": True,
+    "video_save_freq": 0,
     "save_final_agent": False,
 }
 

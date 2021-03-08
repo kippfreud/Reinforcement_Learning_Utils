@@ -11,13 +11,13 @@ TODO:
 
 
 PROTECTED_DIM_NAMES = {"step", "ep", "time", "reward", "pi", "Q", "V"}
-
+INFO_TO_IGNORE = {"TimeLimit.truncated"}
 
 class Observer:
     """
     This is a class for collecting observational data of an agent during deployment.
     """
-    def __init__(self, state_dim_names, action_dim_names, next_state=True, info=True):
+    def __init__(self, state_dim_names, action_dim_names, next_state=False, info=True, extra=True):
         # Check for protected dim_names.
         illegal = PROTECTED_DIM_NAMES & set(state_dim_names + action_dim_names)
         if illegal: raise ValueError(f"dim_names {illegal} already in use.")
@@ -25,7 +25,7 @@ class Observer:
         self.dim_names = ["ep", "time"] + state_dim_names + action_dim_names \
                        + ([f"n_{d}" for d in state_dim_names] if next_state else [])
         self.num_actions = len(action_dim_names)
-        self.next_state, self.info = next_state, info
+        self.next_state, self.info, self.extra = next_state, info, extra
         # Initialise empty dataset.
         self.data, self.empty = [], True
 
@@ -44,7 +44,8 @@ class Observer:
             observation += [reward]
             if self.empty: extra_dim_names.append("reward")            
         # Dictionaries containing additional information produced by agent and environment.
-        for k,v in {**(info if self.info else {}), **extra}.items():
+        for k,v in {**(info if self.info else {}), **(extra if self.extra else {})}.items():
+            if k in INFO_TO_IGNORE: continue
             if type(v) == np.ndarray: 
                 shp = v.shape; v = list(v.flatten())
             else: shp = False; v = [v]

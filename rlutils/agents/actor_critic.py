@@ -24,7 +24,6 @@ class ActorCriticAgent:
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi and V networks.
         if len(state_shape) > 1: raise NotImplementedError()
-            # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else:
             net_code = [(state_shape[0], 64), "R", (64, 128), "R"]
             net_code_pi = net_code + [(128, num_actions), "S"]

@@ -47,7 +47,8 @@ class DqnAgent:
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Tracking variables.
         self.epsilon = self.P["epsilon_start"]
-        self.total_t = 0 # Used for epsilon decay.
+        # self.total_t = 0 # Used for epsilon decay.
+        self.epsilon_decay_per_timestep = (self.P["epsilon_start"] - self.P["epsilon_end"]) / self.P["epsilon_decay"]
         self.updates_since_target_clone = 0
         self.ep_losses = []
 
@@ -130,9 +131,12 @@ class DqnAgent:
         self.memory.add(state, action, torch.tensor([reward]).float().to(self.device), next_state)
         loss = self.update_on_batch()
         if loss: self.ep_losses.append(loss)
-        self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \
-                       np.exp(-1 * self.total_t / self.P["epsilon_decay"])
-        self.total_t += 1
+        # Exponential decay.
+        # self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \
+        #                np.exp(-1 * self.total_t / self.P["epsilon_decay"])
+        # self.total_t += 1
+        # Linear decay as per Nature paper.
+        self.epsilon = max(self.epsilon - self.epsilon_decay_per_timestep, self.P["epsilon_end"])
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""

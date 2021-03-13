@@ -34,7 +34,7 @@ class Observer:
         if self.empty: extra_dim_names = []
         # Basics: state, action, next_state, reward.
         observation = [ep, t] \
-                    + list(state.numpy().flatten()) \
+                    + list(state.cpu().numpy().flatten()) \
                     + list([action] if self.num_actions == 1 else list(action)) \
                     + (list(next_state.flatten()) if self.next_state else []) # Already in NumPy format.
         if type(reward) == np.ndarray:

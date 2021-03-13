@@ -43,7 +43,7 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
             
             # Get state representation.
             if renderer: state = renderer.get(first=True)
-            else: state = torch.from_numpy(state).float().unsqueeze(0)
+            else: state = torch.from_numpy(state).float().to(agent.device).unsqueeze(0)
             
             # Iterate through timesteps.
             while not done:
@@ -64,7 +64,7 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
                 # Get state representation.
                 if done: next_state = None
                 elif renderer: next_state = renderer.get()
-                else: next_state = torch.from_numpy(next_state).float().unsqueeze(0)
+                else: next_state = torch.from_numpy(next_state).float().to(agent.device).unsqueeze(0)
 
                 if train:
                     # Perform some agent-specific operations on each timestep.

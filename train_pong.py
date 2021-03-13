@@ -6,12 +6,12 @@ train_parameters = {
     "project_name": "pong",
     "env": "Pong-v0",
     "model": "dqn",
-    "num_episodes": 100000,
+    "num_episodes": int(5e4),
     "episode_time_limit": None,
     "from_pixels": True,
     "wandb_monitor": True,
     "render_freq": 0,
-    "video_save_freq": 10,
+    "video_save_freq": 250,
     "save_final_agent": False,
 }
 
@@ -30,14 +30,14 @@ else: state_shape, renderer = env.observation_space.shape, None
 # Make DqnAgent.
 if train_parameters["model"] == "dqn":
     agent_parameters = {
-        "replay_capacity": 500000,
+        "replay_capacity": int(1e6),
         "batch_size": 32,
         "lr_Q": 1e-3,
         "gamma": 0.99,
         "epsilon_start": 1,
-        "epsilon_end": 0.05,
-        "epsilon_decay": 100000,
-        "updates_between_target_clone": 2000
+        "epsilon_end": 0.1,
+        "epsilon_decay": int(1e6),
+        "updates_between_target_clone": 10000
     }
     from rlutils.agents.dqn import *
     agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)

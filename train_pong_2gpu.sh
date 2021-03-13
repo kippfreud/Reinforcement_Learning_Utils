@@ -8,6 +8,7 @@
 #SBATCH --time=3-12:00:00
 
 module load CUDA
+module load apps/ffmpeg/4.3
 
 echo "Training on Pong..."
 python train_pong.py

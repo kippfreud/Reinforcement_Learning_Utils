@@ -94,7 +94,6 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
         if type(agent)==StableBaselinesAgent: 
             agent.save(f"saved_runs/{run_name}") 
         else:
-            from joblib import dump
-            dump(agent, f"saved_runs/{run_name}.joblib") 
+            torch.save(agent, f"saved_runs/{run_name}.agent")
 
     return run_name # Return run name for reference.

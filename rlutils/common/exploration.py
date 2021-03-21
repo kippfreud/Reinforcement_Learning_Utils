@@ -25,14 +25,13 @@ class OUNoise(object):
         x  = self.state
         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(self.action_dim)
         self.state = x + dx
-        return self.state
 
     def decay(self, k):
         self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, k / self.decay_period)
     
     def get_action(self, action):
-        ou_state = self.evolve_state()
-        return np.clip(action + ou_state, self.low, self.high)
+        self.evolve_state()
+        return np.clip(action + self.state, self.low, self.high)
 
 
 class UniformNoise(object):

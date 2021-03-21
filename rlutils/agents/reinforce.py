@@ -45,7 +45,7 @@ class ReinforceAgent:
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        extra = {"pi": action_probs.detach().numpy()}
+        extra = {"pi": action_probs.cpu().detach().numpy()}
         if self.V is not None: 
             self.ep_predictions.append((dist.log_prob(action), value[0]))
             extra["V"] = value[0].item()

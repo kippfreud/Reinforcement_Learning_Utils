@@ -5,7 +5,6 @@ import pandas as pd
 """
 TODO: 
     "mean" mode in .add_future()
-    .add_custom_dims(function, dim_names=[""])
     .add_continuous_actions(mapping) - just a special case of the above?
 """
 
@@ -104,3 +103,11 @@ class Observer:
         self.data = np.hstack((self.data, data_new_dims))
         if not new_dims: new_dims = [f"d_{d}" for d in dims]
         self.dim_names += new_dims
+
+    def add_custom_dims(self, func, new_dims): 
+        self.data = np.array(self.data)
+        data_new_dims = np.apply_along_axis(func, 1, self.data)
+        assert data_new_dims.shape[1] == len(new_dims)
+        self.data = np.hstack((self.data, data_new_dims))
+        self.dim_names += new_dims
+    

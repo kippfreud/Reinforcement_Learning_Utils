@@ -58,7 +58,7 @@ class DdpgAgent:
     
     def act(self, state, explore=True):
         """Deterministic action selection plus additive noise."""
-        action_greedy = self.pi(state).detach().numpy()[0]
+        action_greedy = self.pi(state).cpu().detach().numpy()[0]
         if explore: 
             action = self.noise.get_action(action_greedy)
             # Return greedy action and Q values in extra.

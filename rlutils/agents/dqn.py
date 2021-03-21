@@ -128,7 +128,7 @@ class DqnAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, action, torch.tensor([reward]).float().to(self.device), next_state)
+        self.memory.add(state, action, torch.tensor([reward], device=self.device, dtype=torch.float), next_state)
         loss = self.update_on_batch()
         if loss: self.ep_losses.append(loss)
         # Exponential decay.

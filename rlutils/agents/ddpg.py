@@ -62,8 +62,8 @@ class DdpgAgent:
         if explore: 
             action = self.noise.get_action(action_greedy)
             # Return greedy action and Q values in extra.
-            sa = _sa_concat(state, torch.FloatTensor([action], device=self.device))
-            sa_greedy = _sa_concat(state, torch.FloatTensor([action_greedy], device=self.device))
+            sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
+            sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float))
             extra = {"action_greedy":action_greedy, "Q":self.Q(sa).item(), "Q_greedy":self.Q(sa_greedy).item()}
             if self.P["td3"]:
                 extra["Q2"] = self.Q2(sa).item(); extra["Q2_greedy"] = self.Q2(sa_greedy).item()
@@ -127,7 +127,7 @@ class DdpgAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, torch.FloatTensor([action], device=self.device), torch.FloatTensor([reward], device=self.device), next_state)
+        self.memory.add(state, torch.tensor([action], device=self.device, dtype=torch.float), torch.tensor([reward], device=self.device, dtype=torch.float), next_state)                
         losses = self.update_on_batch()
         if losses: self.ep_losses.append(losses)
         self.total_t += 1

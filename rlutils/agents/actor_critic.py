@@ -63,7 +63,7 @@ class ActorCriticAgent:
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""
-        self.ep_losses.append(self.update_on_transition(next_state, torch.tensor([reward], device=self.device)))
+        self.ep_losses.append(self.update_on_transition(next_state, torch.tensor([reward], device=self.device, dtype=torch.float)))
         self.last_s_l_v = None 
 
     def per_episode(self):

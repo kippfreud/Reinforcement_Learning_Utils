@@ -1,9 +1,9 @@
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
-import random
 import numpy as np
 import torch
+from torch.distributions import Categorical
 import torch.nn.functional as F
 
 
@@ -55,21 +55,22 @@ class DqnAgent:
     def act(self, state, explore=True):
         """Epsilon-greedy action selection."""
         Q = self.Q(state).reshape(self.num_actions,-1)
-        extra = {"Q": Q.cpu().detach().numpy()}
-        if (not explore) or random.random() > self.epsilon:
-            # If using decomposed rewards, need to take sum.
-            #
-            # ===================
-            #
-            if self.reward_components > 1: Q = Q.sum(axis=1).reshape(-1,1)
-            #
-            # ===================
-            #
-            # Return action with highest Q value.
-            return Q.max(0)[1].view(1, 1), extra
-        else:
-            # Return a random action.
-            return torch.tensor([[random.randrange(self.num_actions)]], device=self.device, dtype=torch.long), extra
+        # If using decomposed rewards, need to take sum.
+        #
+        # ===================
+        #
+        if self.reward_components > 1: Q = Q.sum(axis=1).reshape(-1,1)
+        #
+        # ===================
+        #
+        # Assemble epsilon-greedy action distribution.
+        greedy = Q.max(0)[1].view(1, 1)
+        if explore: action_probs = torch.ones(self.num_actions, device=self.device) * self.epsilon / self.num_actions
+        else:       action_probs = torch.zeros(self.num_actions, device=self.device)
+        action_probs[greedy] += (1-action_probs.sum())
+        dist = Categorical(action_probs) # Categorical action distribution.
+        action = dist.sample()
+        return action, {"pi": action_probs.cpu().detach().numpy(), "Q": Q.cpu().detach().numpy()}
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the Q network parameters."""

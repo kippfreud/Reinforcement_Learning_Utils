@@ -37,10 +37,10 @@ class ActorCriticAgent:
     def act(self, state, explore=True):
         """Probabilistic action selection."""
         action_probs, value = self.pi(state), self.V(state)
-        dist = Categorical(action_probs) # Categorical action distribution.
+        dist = Categorical(action_probs) 
         action = dist.sample()
         self.last_s_l_v = (state, dist.log_prob(action), value[0])
-        return action, {"pi": action_probs.cpu().detach().numpy(), "V": value[0].item()}
+        return action, {"pi": action_probs.cpu().detach().numpy()[0], "V": value[0].item()}
 
     def update_on_transition(self, next_state, reward):
         """Use the latest transition to update the policy and value network parameters."""

@@ -1,6 +1,8 @@
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
+import random
+
 import numpy as np
 import torch
 from torch.distributions import Categorical
@@ -65,12 +67,12 @@ class DqnAgent:
         #
         # Assemble epsilon-greedy action distribution.
         greedy = Q.max(0)[1].view(1, 1)
-        if explore: action_probs = torch.ones(self.num_actions, device=self.device) * self.epsilon / self.num_actions
-        else:       action_probs = torch.zeros(self.num_actions, device=self.device)
-        action_probs[greedy] += (1-action_probs.sum())
+        if explore: action_probs = torch.ones((1, self.num_actions), device=self.device) * self.epsilon / self.num_actions
+        else:       action_probs = torch.zeros((1, self.num_actions), device=self.device)
+        action_probs[0,greedy] += (1-action_probs.sum())
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        return action, {"pi": action_probs.cpu().detach().numpy(), "Q": Q.cpu().detach().numpy()}
+        return action, {"pi": action_probs.cpu().detach().numpy()[0], "Q": Q.cpu().detach().numpy()}
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the Q network parameters."""
@@ -85,13 +87,11 @@ class DqnAgent:
         # ===================
         #
         if self.reward_components > 1: 
-            Q_values = self.Q(states).reshape(self.P["batch_size"], self.num_actions, -1)[
-                       torch.arange(self.P["batch_size"]), actions.squeeze(), :]
+            Q_values = self.Q(states).reshape(self.P["batch_size"], self.num_actions, -1)[torch.arange(self.P["batch_size"]), actions, :]
         #
         # ===================
         #
-        else:
-            Q_values = self.Q(states).gather(1, actions).squeeze()
+        else: Q_values = self.Q(states).gather(1, actions.reshape(-1,1)).squeeze()
         # Identify nonterminal states (note that replay memory elements are initialised to None).
         nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
         nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
@@ -132,11 +132,7 @@ class DqnAgent:
         self.memory.add(state, action, torch.tensor([reward], device=self.device, dtype=torch.float), next_state)
         loss = self.update_on_batch()
         if loss: self.ep_losses.append(loss)
-        # Exponential decay.
-        # self.epsilon = self.P["epsilon_end"] + (self.P["epsilon_start"] - self.P["epsilon_end"]) * \
-        #                np.exp(-1 * self.total_t / self.P["epsilon_decay"])
-        # self.total_t += 1
-        # Linear decay as per Nature paper.
+        # Decay epsilon linearly as per Nature paper.
         self.epsilon = max(self.epsilon - self.epsilon_decay_per_timestep, self.P["epsilon_end"])
 
     def per_episode(self):

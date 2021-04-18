@@ -1,8 +1,6 @@
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
-import random
-
 import numpy as np
 import torch
 from torch.distributions import Categorical

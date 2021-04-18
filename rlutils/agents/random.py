@@ -1,9 +1,4 @@
-from ..common.networks import SequentialNetwork
-
-import numpy as np
 import torch
-from torch.distributions import Categorical
-import torch.nn.functional as F
 
 
 DEFAULT_HYPERPARAMETERS = {
@@ -17,6 +12,7 @@ class RandomAgent:
                  action_space, 
                  hyperparameters=DEFAULT_HYPERPARAMETERS
                  ):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_space = action_space
         self.P = hyperparameters
         self.a_last = self.action_space.sample()

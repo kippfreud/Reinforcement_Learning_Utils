@@ -4,6 +4,7 @@ import torch
 DEFAULT_HYPERPARAMETERS = {
     "method": "uniform",
     "inertia": 0,
+    "gamma": 0.99
 }
 
 

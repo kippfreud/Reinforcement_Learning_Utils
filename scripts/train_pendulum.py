@@ -1,15 +1,13 @@
-from rlutils.common.deployment import train
-from rlutils.common.env_wrappers import NormaliseActionWrapper
-
 import gym
+import rlutils
 
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "model": "sac",
+    "agent": "td3",
     "num_episodes": 100,
     "episode_time_limit": 500,
-    # "from_pixels": False,
+    "from_pixels": False,
     "wandb_monitor": False,
     "render_freq": 0,
     "video_save_freq": 0,
@@ -17,9 +15,8 @@ train_parameters = {
 }
 
 # Make environment.
-env = NormaliseActionWrapper(gym.make(train_parameters["env"]))
+env = rlutils.commmon.env_wrappers.NormaliseActionWrapper(gym.make(train_parameters["env"]))
 
-# Make DdpgAgent.
 if train_parameters["model"] in ("ddpg","td3"):
     agent_parameters = {
         "replay_capacity": 10000,
@@ -34,10 +31,6 @@ if train_parameters["model"] in ("ddpg","td3"):
         "td3_noise_clip": 0.5,
         "td3_policy_freq": 2
     }
-    from rlutils.agents.ddpg import *
-    agent = DdpgAgent(env.observation_space.shape, env.action_space, agent_parameters)
-
-# Make SacAgent.
 if train_parameters["model"] == "sac":
     agent_parameters = {
         "replay_capacity": 10000,
@@ -48,7 +41,5 @@ if train_parameters["model"] == "sac":
         "alpha": 0.2,
         "tau": 0.005,
     }
-    from rlutils.agents.sac import *
-    agent = SacAgent(env.observation_space.shape, env.action_space.shape[0], agent_parameters)
-
+agent = rlutils.agent(train_parameters["agent"], env, agent_parameters)
 run_name = train(agent, env, train_parameters)

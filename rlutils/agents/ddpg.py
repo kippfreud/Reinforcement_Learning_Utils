@@ -1,3 +1,7 @@
+"""
+DESCRIPTION
+"""
+
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 from ..common.exploration import OUNoise, UniformNoise
@@ -7,38 +11,16 @@ import torch
 import torch.nn.functional as F 
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "replay_capacity": 50000,
-    "batch_size": 128,
-    "lr_pi": 1e-4,
-    "lr_Q": 1e-3,
-    "gamma": 0.99,
-    "tau": 0.005,
-    "noise_params": (0., 0.15, 0.3, 0.3, 1000),
-    "td3": True,
-    "td3_noise_std": 0.2,
-    "td3_noise_clip": 0.5,
-    "td3_policy_freq": 2
-}
-
-
 class DdpgAgent:
-    def __init__(self, 
-                 state_shape,
-                 action_space, 
-                 hyperparameters=DEFAULT_HYPERPARAMETERS,
-                 net_code_pi=None,
-                 net_code_Q=None
-                 ):
+    def __init__(self, env, hyperparameters, net_code_pi=None, net_code_Q=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
-        num_actions = action_space.shape[0]
         # Create pi and Q networks.
         if net_code_pi is None:
-            if len(state_shape) > 1: raise NotImplementedError()
+            if len(env.observation_space.shape) > 1: raise NotImplementedError()
             else: 
-                net_code_pi = [(state_shape[0], 256), "R", (256, 256), "R", (256, num_actions), "T"]
-                net_code_Q = [(state_shape[0]+num_actions, 256), "R", (256, 256), "R", (256, 1)]
+                net_code_pi = [(env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, env.action_space.shape[0]), "T"]
+                net_code_Q = [(env.observation_space.shape[0]+env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.pi_target = SequentialNetwork(code=net_code_pi, eval_only=True).to(self.device)
         self.pi_target.load_state_dict(self.pi.state_dict()) # Clone.
@@ -49,8 +31,8 @@ class DdpgAgent:
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Create noise process for exploration.
-        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(action_space, *self.P["noise_params"][1:])
-        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(env.action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(env.action_space, *self.P["noise_params"][1:])
         # Tracking variables.   
         self.total_ep = 0 # Used for noise decay.
         self.total_t = 0 # Used for policy update frequency for TD3.

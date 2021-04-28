@@ -5,7 +5,7 @@ import gym
 train_parameters = {
     "project_name": "pong",
     "env": "Pong-v0",
-    "model": "dqn",
+    "agent": "dqn",
     "num_episodes": int(5e4),
     "episode_time_limit": None,
     "from_pixels": True,

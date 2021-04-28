@@ -34,3 +34,14 @@ def screen_processor(screen, env):
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (batch, channel, height, width).
     return resize(screen).unsqueeze(0).to(DEVICE)
+
+def reward_function(state):
+    """Reward function for CartPole-v1."""
+    theta_threshold_radians = 12 * 2 * np.pi / 360
+    x_threshold = 2.4
+    x, _, theta, _ = state
+    done = bool(x < -x_threshold
+                or x > x_threshold
+                or theta < -theta_threshold_radians
+                or theta > theta_threshold_radians)
+    return 1 if not done else 0

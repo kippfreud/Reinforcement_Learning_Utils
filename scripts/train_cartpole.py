@@ -1,14 +1,13 @@
-from rlutils.common.deployment import train
-
 import gym
+import rlutils
 
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "model": "dqn",
-    "num_episodes": 10000,
+    "agent": "reinforce",
+    "num_episodes": 2000,
     "episode_time_limit": 500,
-    "from_pixels": True,
+    "from_pixels": False,
     "wandb_monitor": True,
     "render_freq": 0,
     "video_save_freq": 0,
@@ -27,40 +26,30 @@ if train_parameters["from_pixels"]:
     state_shape = s.shape
 else: state_shape, renderer = env.observation_space.shape, None
 
-# Make DqnAgent.
-if train_parameters["model"] == "dqn":
+if train_parameters["agent"] == "dqn":
     agent_parameters = {
         "replay_capacity": 50000,
         "batch_size": 32,
         "lr_Q": 1e-3,
-        "gamma": 0.99,
         "epsilon_start": 1,
         "epsilon_end": 0.05,
         "epsilon_decay": 100000,
         "updates_between_target_clone": 2000
     }
-    from rlutils.agents.dqn import *
-    agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)
-
-# Make ReinforceAgent.
-elif train_parameters["model"] == "reinforce":
+elif train_parameters["agent"] == "reinforce":
     agent_parameters = {
         "lr_pi": 1e-4,
         "lr_V": 1e-3,
-        "gamma": 0.99,
         "baseline": "adv"
     }
-    from rlutils.agents.reinforce import *
-    agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters)
-
-# Make ActorCriticAgent.
-elif train_parameters["model"] == "actor-critic":
+elif train_parameters["agent"] == "actor_critic":
     agent_parameters = {
         "lr_pi": 1e-4,
         "lr_V": 1e-3,
-        "gamma": 0.99
     }
-    from rlutils.agents.actor_critic import *
-    agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
-
-run_name = train(agent, env, train_parameters, renderer)
+elif train_parameters["agent"] == "simple_model_based":
+    agent_parameters = {
+        "reward_function": rlutils.specific.CartPole.reward_function,
+    }
+agent = rlutils.agent(train_parameters["agent"], env, agent_parameters)
+run_name = rlutils.train(agent, env, train_parameters, renderer)

@@ -12,33 +12,16 @@ import torch
 import torch.nn.functional as F
 
 
-DEFAULT_HYPERPARAMETERS = {  
-    "replay_capacity": 2000,
-    "random_replay_capacity": 2000, 
-    "batch_size": 256,
-    "batch_ratio": 0.9, # Proportion of on-policy transitions.
-    "steps_between_update": 10,
-    "lr_model": 1e-3,
-    "num_rollouts": 50,
-    "rollout_horizon": 20,
-    "gamma": 0.99,
-}
-
 class SimpleModelBasedAgent:
-    def __init__(self, 
-                 state_shape, 
-                 action_space,
-                 reward_function,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
-                 ):
+    def __init__(self, env, hyperparameters):
+        assert "reward_function" in hyperparameters, "Need to provide reward function."
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.action_space = action_space
-        self.reward_function = reward_function
         self.P = hyperparameters 
+        self.action_space = env.action_space
         # Create model network.
-        if len(state_shape) > 1: raise NotImplementedError()
+        if len(env.observation_space.shape) > 1: raise NotImplementedError()
         else:
-            net_code = [(state_shape[0]+1, 32), "R", (32, 64), "R", (64, state_shape[0])]
+            net_code = [(env.observation_space.shape[0]+1, 32), "R", (32, 64), "R", (64, env.observation_space.shape[0])]
         self.model = SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for on-policy transitions and one for random transitions.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
@@ -111,6 +94,6 @@ class SimpleModelBasedAgent:
                 rollout_action = self.action_space.sample() # Random action selection.
                 if t == 0: first_actions.append(rollout_action)               
                 rollout_state += self.model(torch.cat((rollout_state, torch.Tensor([rollout_action]).to(self.device))).to(self.device))
-                rollout_return += (self.P["gamma"] ** t) * self.reward_function(rollout_state)                
+                rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state)                
             returns.append(rollout_return)
         return returns, first_actions

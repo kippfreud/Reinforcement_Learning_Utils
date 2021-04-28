@@ -1,0 +1,49 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.10.10
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    python_version: 3.6.9
+agent:
+  desc: null
+  value: actor_critic
+env:
+  desc: null
+  value: CartPole-v1
+episode_time_limit:
+  desc: null
+  value: 500
+from_pixels:
+  desc: null
+  value: false
+gamma:
+  desc: null
+  value: 0.99
+lr_V:
+  desc: null
+  value: 0.0005
+lr_pi:
+  desc: null
+  value: 0.0001
+num_episodes:
+  desc: null
+  value: 500
+project_name:
+  desc: null
+  value: cartpole
+render_freq:
+  desc: null
+  value: 0
+save_final_agent:
+  desc: null
+  value: false
+video_save_freq:
+  desc: null
+  value: 0
+wandb_monitor:
+  desc: null
+  value: true

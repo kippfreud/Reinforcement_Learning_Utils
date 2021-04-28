@@ -1,17 +1,13 @@
+"""
+DESCRIPTION
+"""
+
 import numpy as np
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "model_class": "DQN",
-    "verbose": True
-}
-
-
 class StableBaselinesAgent:
-    def __init__(self,
-                 env,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
-                 ):
+    def __init__(self, env, hyperparameters):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
 
         if self.P["model_class"] == "dqn":
@@ -66,5 +62,5 @@ class StableBaselinesAgent:
     def load(self, path): self.model = self.model_class.load(path)
 
     # The regular learning methods shouldn't be used.
-    def per_timestep(_0,_1,_2,_3,_4): raise NotImplementedError("Use agent.train to train!")
+    def per_timestep(self, state, action, reward, next_state): raise NotImplementedError("Use agent.train to train!")
     def per_episode(_0): raise NotImplementedError("Use agent.train to train!")

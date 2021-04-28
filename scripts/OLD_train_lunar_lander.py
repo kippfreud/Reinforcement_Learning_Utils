@@ -6,7 +6,7 @@ train_parameters = {
     # * = Not used by StableBaselinesAgent.
     "project_name": "lunar_lander",
     "env": "LunarLanderContinuous-v2",
-    "model": "sac",
+    "agent": "sac",
     "num_episodes": 1, # *
     "episode_time_limit": 200, # *
     "wandb_monitor": False, # *

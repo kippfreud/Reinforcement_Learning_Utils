@@ -1,28 +1,19 @@
+"""
+DESCRIPTION
+"""
+
 import numpy as np
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "gamma": 0.99,
-    "epsilon": 0.5
-}
-
-
 class OffPolicyMCAgent:
-    def __init__(self, 
-                 state_shape,
-                 action_space,
-                 hyperparameters=None
-                 ): 
-        if hyperparameters is not None:
-            self.P = hyperparameters # Store hyperparameter dictionary.
-        else:
-            self.P = DEFAULT_HYPERPARAMETERS # Adopt defaults.
-        self.action_space = action_space
+    def __init__(self, env, hyperparameters): 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.P = hyperparameters 
+        self.action_space = env.action_space
         self.action_shape = self.action_space.shape[:-1]
-        print(self.action_shape)
-        self.Q = np.zeros(tuple(list(state_shape) + list(self.action_shape)))
+        self.Q = np.zeros(tuple(list(env.observation_space.shape) + list(self.action_shape)))
         self.C = self.Q.copy()
-        self.pi = np.zeros(tuple(list(state_shape) + [len(self.action_shape)]), dtype=int)
+        self.pi = np.zeros(tuple(list(env.observation_space.shape) + [len(self.action_shape)]), dtype=int)
         self.exploratory_action_prob = (1 - self.P["epsilon"]) / np.prod(self.action_shape)
         self.ep_transitions = []
 

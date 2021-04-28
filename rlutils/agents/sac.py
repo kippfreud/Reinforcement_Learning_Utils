@@ -1,3 +1,7 @@
+"""
+DESCRIPTION
+"""
+
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
@@ -7,31 +11,16 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "replay_capacity": 10000,
-    "batch_size": 256,
-    "lr_pi": 1e-4,
-    "lr_Q": 1e-3,
-    "gamma": 0.99,
-    "alpha": 0.2,
-    "tau": 0.01,
-}
-
-
 class SacAgent:
-    def __init__(self, 
-                 state_shape,
-                 num_actions, 
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
-                 ):
+    def __init__(self, env, hyperparameters):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
-        self.num_actions = num_actions
+        self.num_actions = env.action_space.shape[0]
         # Create pi and Q networks.
-        if len(state_shape) > 1: raise NotImplementedError()
+        if len(env.observation_space.shape) > 1: raise NotImplementedError()
         else: 
-            net_code_pi = [(state_shape[0], 256), "R", (256, 256), "R", (256, 2*num_actions)] # Mean and standard deviation.
-            net_code_Q = [(state_shape[0]+num_actions, 256), "R", (256, 256), "R", (256, 1)]
+            net_code_pi = [(env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, 2*num_actions)] # Mean and standard deviation.
+            net_code_Q = [(env.observation_space.shape[0]+self.num_actions, 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.Q, self.Q_target = self._make_Q(net_code_Q)
         self.Q2, self.Q2_target = self._make_Q(net_code_Q)
@@ -131,4 +120,3 @@ class SacAgent:
 def _sa_concat(states, actions):
     """Concatenate states and actions into a single input vector for Q networks."""
     return torch.cat([states, actions], 1).float()
-

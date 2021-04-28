@@ -1,3 +1,7 @@
+"""
+DESCRIPTION
+"""
+
 from ..common.networks import SequentialNetwork
 
 import numpy as np
@@ -6,29 +10,17 @@ from torch.distributions import Categorical
 import torch.nn.functional as F
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "lr_pi": 1e-4,
-    "lr_V": 1e-3,
-    "gamma": 0.99,
-    "baseline": "adv",
-}
-
-
 class ReinforceAgent:
-    def __init__(self, 
-                 state_shape, 
-                 num_actions,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
-                 ):
+    def __init__(self, env, hyperparameters):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi network (and V if using advantage baselining).
-        if len(state_shape) > 1: raise NotImplementedError()
+        if len(env.observation_space.shape) > 1: raise NotImplementedError()
             # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else: 
-            net_code = [(state_shape[0], 64), "R", (64, 128), "R"]
-            net_code_pi = net_code + [(128, num_actions), "S"]
+            net_code = [(env.observation_space.shape[0], 64), "R", (64, 128), "R"]
+            net_code_pi = net_code + [(128, env.action_space.n), "S"]
             net_code_V = net_code + [(128, 1)] 
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         if self.P["baseline"] == "adv":

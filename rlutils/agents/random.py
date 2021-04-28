@@ -1,21 +1,15 @@
+"""
+DESCRIPTION
+"""
+
 import torch
 
 
-DEFAULT_HYPERPARAMETERS = {
-    "method": "uniform",
-    "inertia": 0,
-    "gamma": 0.99
-}
-
-
 class RandomAgent:
-    def __init__(self, 
-                 action_space, 
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
-                 ):
+    def __init__(self, env, hyperparameters):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.action_space = action_space
         self.P = hyperparameters
+        self.action_space = env.action_space
         self.a_last = self.action_space.sample()
 
     def act(self, state, explore=True):

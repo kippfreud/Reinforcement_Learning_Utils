@@ -2,13 +2,13 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 import numpy as np
 
 
-class StableBaselinesAgent:
+class StableBaselinesAgent(Agent):
     def __init__(self, env, hyperparameters):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
+        Agent.__init__(self, env, hyperparameters)
 
         if self.P["model_class"] == "dqn":
             from stable_baselines3 import DQN
@@ -63,4 +63,4 @@ class StableBaselinesAgent:
 
     # The regular learning methods shouldn't be used.
     def per_timestep(self, state, action, reward, next_state): raise NotImplementedError("Use agent.train to train!")
-    def per_episode(_0): raise NotImplementedError("Use agent.train to train!")
+    def per_episode(self): raise NotImplementedError("Use agent.train to train!")

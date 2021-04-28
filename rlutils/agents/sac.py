@@ -2,6 +2,7 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
@@ -11,16 +12,14 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
 
-class SacAgent:
+class SacAgent(Agent):
     def __init__(self, env, hyperparameters):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
-        self.num_actions = env.action_space.shape[0]
+        Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
-        if len(env.observation_space.shape) > 1: raise NotImplementedError()
+        if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else: 
-            net_code_pi = [(env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, 2*num_actions)] # Mean and standard deviation.
-            net_code_Q = [(env.observation_space.shape[0]+self.num_actions, 256), "R", (256, 256), "R", (256, 1)]
+            net_code_pi = [(self.env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, 2*self.env.action_space.shape[0])] # Mean and standard deviation.
+            net_code_Q = [(self.env.observation_space.shape[0]+self.env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.Q, self.Q_target = self._make_Q(net_code_Q)
         self.Q2, self.Q2_target = self._make_Q(net_code_Q)
@@ -107,7 +106,7 @@ class SacAgent:
     def _pi_to_action_and_log_prob(self, pi): 
         """SAC uses the output of self.pi as the mean and log standard deviation of a squashed Gaussian,
         then generates an action by sampling from that distribution."""
-        mu, log_std = torch.split(pi, self.num_actions, dim=1)
+        mu, log_std = torch.split(pi, self.env.action_space.shape[0], dim=1)
         log_std = torch.clamp(log_std, -20, 2)
         gaussian = Normal(mu, torch.exp(log_std))
         action_unsquashed = gaussian.sample()

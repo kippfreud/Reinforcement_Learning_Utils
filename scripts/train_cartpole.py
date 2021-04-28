@@ -4,11 +4,11 @@ import rlutils
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "agent": "reinforce",
+    "agent": "simple_model_based",
     "num_episodes": 2000,
     "episode_time_limit": 500,
     "from_pixels": False,
-    "wandb_monitor": True,
+    "wandb_monitor": False,
     "render_freq": 0,
     "video_save_freq": 0,
     "save_final_agent": False,
@@ -48,8 +48,10 @@ elif train_parameters["agent"] == "actor_critic":
         "lr_V": 1e-3,
     }
 elif train_parameters["agent"] == "simple_model_based":
+    from rlutils.specific.CartPole import reward_function
     agent_parameters = {
-        "reward_function": rlutils.specific.CartPole.reward_function,
+        "reward_function": reward_function,
     }
 agent = rlutils.agent(train_parameters["agent"], env, agent_parameters)
+print(agent)
 run_name = rlutils.train(agent, env, train_parameters, renderer)

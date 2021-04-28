@@ -5,6 +5,8 @@ def agent(agent, env, hyperparameters=dict()):
     xxx
     """
     agent = agent.lower()
+    # Special treatment for TD3 (a variant of DDPG).
+    if agent == "td3": hyperparameters["td3"] = True; agent = "ddpg"
     assert agent in default_hyperparameters
     # Overwrite default hyperparameters where applicable.
     P = default_hyperparameters[agent]
@@ -17,7 +19,6 @@ def agent(agent, env, hyperparameters=dict()):
     elif agent == "random":             from ..agents.random import RandomAgent as agent_class
     elif agent == "reinforce":          from ..agents.reinforce import ReinforceAgent as agent_class
     elif agent == "sac":                from ..agents.sac import SacAgent as agent_class
-    elif agent == "td3":                from ..agents.ddpg import DdpgAgent as agent_class; assert P["td3"]
     elif agent == "simple_model_based": from ..agents.simple_model_based import SimpleModelBasedAgent as agent_class
     elif agent == "stable_baselines":   from ..agents.stable_baselines import StableBaselinesAgent as agent_class
     return agent_class(env, P)

@@ -1,5 +1,5 @@
 """
-NOTE: Must be lowercase.
+NOTE: Agent names must be lowercase.
 """
 
 default_hyperparameters = {
@@ -12,13 +12,14 @@ default_hyperparameters = {
 
   "ddpg": {
     "replay_capacity": 50000, # Size of replay buffer (starts overwriting when full).
-    "batch_size": 128,
+    "batch_size": 128, # Size of batches to sample from replay buffer during learning.
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
     "tau": 0.005,
     "noise_params": (0., 0.15, 0.3, 0.3, 1000),
-    "td3": True, # Whether or not to enable the TD3 enhancements. 
+    "td3": False, # Whether or not to enable the TD3 enhancements. 
+    # --- If TD3 enabled ---
     "td3_noise_std": 0.2,
     "td3_noise_clip": 0.5,
     "td3_policy_freq": 2
@@ -26,7 +27,7 @@ default_hyperparameters = {
 
   "dqn": {
     "replay_capacity": 10000, # Size of replay buffer (starts overwriting when full).
-    "batch_size": 128,
+    "batch_size": 128, # Size of batches to sample from replay buffer during learning.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
     "epsilon_start": 0.9,
@@ -51,12 +52,12 @@ default_hyperparameters = {
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_V": 1e-3, # Learning rate for state value function.
     "gamma": 0.99, # Discount factor.
-    "baseline": "adv"
+    "baseline": "adv" # Baselining method: either "off", "Z" or "adv".
   },
 
   "sac": {
     "replay_capacity": 10000, # Size of replay buffer (starts overwriting when full).
-    "batch_size": 256,
+    "batch_size": 256, # Size of batches to sample from replay buffer during learning.
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.

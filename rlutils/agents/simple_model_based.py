@@ -4,6 +4,7 @@ One component of the architecture from:
     "Neural Network Dynamics for Model-Based Deep Reinforcement Learning with Model-Free Fine-Tuning"
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
@@ -12,16 +13,14 @@ import torch
 import torch.nn.functional as F
 
 
-class SimpleModelBasedAgent:
+class SimpleModelBasedAgent(Agent):
     def __init__(self, env, hyperparameters):
         assert "reward_function" in hyperparameters, "Need to provide reward function."
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
-        self.action_space = env.action_space
+        Agent.__init__(self, env, hyperparameters)
         # Create model network.
-        if len(env.observation_space.shape) > 1: raise NotImplementedError()
+        if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else:
-            net_code = [(env.observation_space.shape[0]+1, 32), "R", (32, 64), "R", (64, env.observation_space.shape[0])]
+            net_code = [(self.env.observation_space.shape[0]+1, 32), "R", (32, 64), "R", (64, self.env.observation_space.shape[0])]
         self.model = SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for on-policy transitions and one for random transitions.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
@@ -34,7 +33,7 @@ class SimpleModelBasedAgent:
 
     def act(self, state, explore=True):
         """Either random or model-based action selection."""
-        if self.random_mode: action, extra = self.action_space.sample(), {}
+        if self.random_mode: action, extra = self.env.action_space.sample(), {}
         else: 
             returns, first_actions = self._model_rollout(state)
             best_rollout = np.argmax(returns)
@@ -91,7 +90,7 @@ class SimpleModelBasedAgent:
         for _ in range(self.P["num_rollouts"]):
             rollout_state, rollout_return = state[0].detach().clone().to(self.device), 0
             for t in range(self.P["rollout_horizon"]):
-                rollout_action = self.action_space.sample() # Random action selection.
+                rollout_action = self.env.action_space.sample() # Random action selection.
                 if t == 0: first_actions.append(rollout_action)               
                 rollout_state += self.model(torch.cat((rollout_state, torch.Tensor([rollout_action]).to(self.device))).to(self.device))
                 rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state)                

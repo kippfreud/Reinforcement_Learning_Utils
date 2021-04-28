@@ -2,6 +2,7 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 from ..common.exploration import OUNoise, UniformNoise
@@ -11,16 +12,15 @@ import torch
 import torch.nn.functional as F 
 
 
-class DdpgAgent:
+class DdpgAgent(Agent):
     def __init__(self, env, hyperparameters, net_code_pi=None, net_code_Q=None):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
+        Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
         if net_code_pi is None:
-            if len(env.observation_space.shape) > 1: raise NotImplementedError()
+            if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
             else: 
-                net_code_pi = [(env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, env.action_space.shape[0]), "T"]
-                net_code_Q = [(env.observation_space.shape[0]+env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
+                net_code_pi = [(self.env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, self.env.action_space.shape[0]), "T"]
+                net_code_Q = [(self.env.observation_space.shape[0]+self.env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.pi_target = SequentialNetwork(code=net_code_pi, eval_only=True).to(self.device)
         self.pi_target.load_state_dict(self.pi.state_dict()) # Clone.
@@ -31,8 +31,8 @@ class DdpgAgent:
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"]) 
         # Create noise process for exploration.
-        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(env.action_space, *self.P["noise_params"][1:])
-        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(env.action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(self.env.action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
         # Tracking variables.   
         self.total_ep = 0 # Used for noise decay.
         self.total_t = 0 # Used for policy update frequency for TD3.

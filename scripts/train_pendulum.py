@@ -1,10 +1,11 @@
 import gym
 import rlutils
+from rlutils.common.env_wrappers import NormaliseActionWrapper
 
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "agent": "td3",
+    "agent": "simple_model_based",
     "num_episodes": 100,
     "episode_time_limit": 500,
     "from_pixels": False,
@@ -15,9 +16,9 @@ train_parameters = {
 }
 
 # Make environment.
-env = rlutils.commmon.env_wrappers.NormaliseActionWrapper(gym.make(train_parameters["env"]))
+env = NormaliseActionWrapper(gym.make(train_parameters["env"]))
 
-if train_parameters["model"] in ("ddpg","td3"):
+if train_parameters["agent"] in ("ddpg","td3"):
     agent_parameters = {
         "replay_capacity": 10000,
         "batch_size": 128,
@@ -26,12 +27,12 @@ if train_parameters["model"] in ("ddpg","td3"):
         "gamma": 0.99,
         "tau": 0.01,
         "noise_params": (0., 0.15, 0.5, 0.01, 50000),
-        "td3": train_parameters["model"] == "td3",
+        # --- If TD3 enabled ---
         "td3_noise_std": 0.2,
         "td3_noise_clip": 0.5,
         "td3_policy_freq": 2
     }
-if train_parameters["model"] == "sac":
+if train_parameters["agent"] == "sac":
     agent_parameters = {
         "replay_capacity": 10000,
         "batch_size": 64,
@@ -41,5 +42,11 @@ if train_parameters["model"] == "sac":
         "alpha": 0.2,
         "tau": 0.005,
     }
+elif train_parameters["agent"] == "simple_model_based":
+    from rlutils.specific.Pendulum import reward_function
+    agent_parameters = {
+        "reward_function": reward_function,
+    }
 agent = rlutils.agent(train_parameters["agent"], env, agent_parameters)
-run_name = train(agent, env, train_parameters)
+print(agent)
+# run_name = train(agent, env, train_parameters)

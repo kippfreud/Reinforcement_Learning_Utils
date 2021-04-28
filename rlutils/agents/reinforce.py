@@ -2,6 +2,7 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 
 import numpy as np
@@ -10,17 +11,16 @@ from torch.distributions import Categorical
 import torch.nn.functional as F
 
 
-class ReinforceAgent:
+class ReinforceAgent(Agent):
     def __init__(self, env, hyperparameters):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
+        Agent.__init__(self, env, hyperparameters)
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi network (and V if using advantage baselining).
-        if len(env.observation_space.shape) > 1: raise NotImplementedError()
+        if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
             # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
         else: 
-            net_code = [(env.observation_space.shape[0], 64), "R", (64, 128), "R"]
-            net_code_pi = net_code + [(128, env.action_space.n), "S"]
+            net_code = [(self.env.observation_space.shape[0], 64), "R", (64, 128), "R"]
+            net_code_pi = net_code + [(128, self.env.action_space.n), "S"]
             net_code_V = net_code + [(128, 1)] 
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         if self.P["baseline"] == "adv":
@@ -67,14 +67,9 @@ class ReinforceAgent:
 
     def baseline(self, returns, values):
         """Apply baselining to returns to improve update stability."""
-        b = self.P["baseline"]
-        if b == "off": return returns # No baselining.
-        if b == "Z": 
-            # Z-normalisation.
-            return (returns - returns.mean()) / (returns.std() + self.eps)
-        if b == "adv":
-            # Advantage (subtract value prediction).
-            return (returns - values).detach()
+        if self.P["baseline"] == "off":  return returns # No baselining.
+        elif self.P["baseline"] == "Z":   return (returns - returns.mean()) / (returns.std() + self.eps) # Z-normalisation.
+        elif self.P["baseline"] == "adv": return (returns - values).detach() # Advantage (subtract value prediction).
         else: raise NotImplementedError("Baseline method not recognised.")
 
     def per_timestep(self, state, action, reward, next_state):

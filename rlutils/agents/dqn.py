@@ -2,6 +2,7 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 
@@ -11,19 +12,17 @@ from torch.distributions import Categorical
 import torch.nn.functional as F
 
 
-class DqnAgent:
+class DqnAgent(Agent):
     def __init__(self, env, hyperparameters, net_code=None):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
-        self.num_actions = env.action_space.n
+        Agent.__init__(self, env, hyperparameters)
         # Create Q network.
         if net_code is None:
-            if len(env.observation_space.shape) > 1: 
+            if len(self.env.observation_space.shape) > 1: 
                 net_preset = "CartPoleQ_Pixels"
-                net_code, input_shape, output_size = None, env.observation_space.shape, self.num_actions*self.P["reward_components"]
+                net_code, input_shape, output_size = None, self.env.observation_space.shape, self.env.action_space.n*self.P["reward_components"]
             else: 
                 # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
-                net_code = [(env.observation_space.shape[0], 256), "R", (256, 128), "R", (128, 64), "R", (64, self.num_actions*self.P["reward_components"])]
+                net_code = [(self.env.observation_space.shape[0], 256), "R", (256, 128), "R", (128, 64), "R", (64, self.env.action_space.n*self.P["reward_components"])]
                 net_preset, input_shape, output_size = None, None, None
         self.Q = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
         self.Q_target = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, eval_only=True).to(self.device)
@@ -39,7 +38,7 @@ class DqnAgent:
 
     def act(self, state, explore=True):
         """Epsilon-greedy action selection."""
-        Q = self.Q(state).reshape(self.num_actions,-1)
+        Q = self.Q(state).reshape(self.env.action_space.n,-1)
         # If using decomposed rewards, need to take sum.
         #
         # ===================
@@ -50,8 +49,8 @@ class DqnAgent:
         #
         # Assemble epsilon-greedy action distribution.
         greedy = Q.max(0)[1].view(1, 1)
-        if explore: action_probs = torch.ones((1, self.num_actions), device=self.device) * self.epsilon / self.num_actions
-        else:       action_probs = torch.zeros((1, self.num_actions), device=self.device)
+        if explore: action_probs = torch.ones((1, self.env.action_space.n), device=self.device) * self.epsilon / self.env.action_space.n
+        else:       action_probs = torch.zeros((1, self.env.action_space.n), device=self.device)
         action_probs[0,greedy] += (1-action_probs.sum())
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
@@ -70,7 +69,7 @@ class DqnAgent:
         # ===================
         #
         if self.P["reward_components"] > 1: 
-            Q_values = self.Q(states).reshape(self.P["batch_size"], self.num_actions, -1)[torch.arange(self.P["batch_size"]), actions, :]
+            Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, -1)[torch.arange(self.P["batch_size"]), actions, :]
         #
         # ===================
         #
@@ -86,7 +85,7 @@ class DqnAgent:
         #
         Q_t_n = self.Q_target(nonterminal_next_states)
         if self.P["reward_components"] > 1: 
-            Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.num_actions, -1)
+            Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.env.action_space.n, -1)
             actions_next = Q_t_n.sum(axis=2).max(1)[1].detach()
         else: 
             actions_next = Q_t_n.max(1)[1].detach()

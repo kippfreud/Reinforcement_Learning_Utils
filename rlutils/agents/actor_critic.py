@@ -2,6 +2,7 @@
 DESCRIPTION
 """
 
+from ._generic import Agent
 from ..common.networks import SequentialNetwork
 
 import numpy as np
@@ -10,16 +11,15 @@ from torch.distributions import Categorical
 import torch.nn.functional as F
 
 
-class ActorCriticAgent:
+class ActorCriticAgent(Agent):
     def __init__(self, env, hyperparameters):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
+        Agent.__init__(self, env, hyperparameters)
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi and V networks.
-        if len(env.observation_space.shape) > 1: raise NotImplementedError()
+        if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else:
-            net_code = [(env.observation_space.shape[0], 64), "R", (64, 128), "R"]
-            net_code_pi = net_code + [(128, env.action_space.n), "S"]
+            net_code = [(self.env.observation_space.shape[0], 64), "R", (64, 128), "R"]
+            net_code_pi = net_code + [(128, self.env.action_space.n), "S"]
             net_code_V = net_code + [(128, 1)] 
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.V = SequentialNetwork(code=net_code_V, lr=self.P["lr_V"]).to(self.device)

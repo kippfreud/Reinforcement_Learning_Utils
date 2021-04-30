@@ -36,7 +36,7 @@ class DqnAgent(Agent):
         self.updates_since_target_clone = 0
         self.ep_losses = []
 
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Epsilon-greedy action selection."""
         Q = self.Q(state).reshape(self.env.action_space.n,-1)
         # If using decomposed rewards, need to take sum.
@@ -54,7 +54,7 @@ class DqnAgent(Agent):
         action_probs[0,greedy] += (1-action_probs.sum())
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        return action, {"pi": action_probs.cpu().detach().numpy()[0], "Q": Q.cpu().detach().numpy()}
+        return action, {"pi": action_probs.cpu().detach().numpy()[0], "Q": Q.cpu().detach().numpy()} if do_extra else {}
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the Q network parameters."""

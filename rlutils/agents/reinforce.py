@@ -30,17 +30,17 @@ class ReinforceAgent(Agent):
         self.ep_predictions = [] # Log prob actions (and value).
         self.ep_rewards = []
 
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection."""
         state = state.to(self.device)
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        extra = {"pi": action_probs.cpu().detach().numpy()}
+        extra = {"pi": action_probs.cpu().detach().numpy()} if do_extra else {}
         if self.V is not None: 
             self.ep_predictions.append((dist.log_prob(action), value[0]))
-            extra["V"] = value[0].item()
+            if do_extra: extra["V"] = value[0].item()
         else: 
             self.ep_predictions.append(dist.log_prob(action))
         return action, extra

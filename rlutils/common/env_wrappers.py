@@ -4,7 +4,7 @@ import gym
 class NormaliseActionWrapper(gym.ActionWrapper):
     """
     For environments with continuous action spaces.
-    Maps normalised actions in [0,1] into the range used by the environment.
+    Maps normalised actions in [-1,1] into the range used by the environment.
     """
     def __init__(self, env):
         super().__init__(env)

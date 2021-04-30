@@ -6,10 +6,12 @@ import numpy as np
 from tqdm import tqdm
 
 
-def train(agent, env, P, renderer=None, observer=None):
-    return deploy(agent, env, P, True, renderer, observer)
+P_DEFAULT = {"num_episodes": 100, "render_freq": 1}
 
-def deploy(agent, env, P, train=False, renderer=None, observer=None):
+def train(agent, P=P_DEFAULT, renderer=None, observer=None):
+    return deploy(agent, P, True, renderer, observer)
+
+def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
 
     # Initialise weights and biases monitoring.
     if "wandb_monitor" in P and P["wandb_monitor"]: 
@@ -18,18 +20,20 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
         run = wandb.init(project=P["project_name"], monitor_gym=True, config={**agent.P, **P})
         run_name = run.name
         if train:
-            try:
-                if P["model"] == "dqn": wandb.watch(agent.Q)
-                elif P["model"] in ("reinforce","actor-critic","ddpg","td3","sac"): wandb.watch(agent.pi)
+            try: wandb.watch(agent.Q)
+            except: pass
+            try: wandb.watch(agent.pi)
             except: pass
     else:
         import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Add wrappers to environment.
     if "episode_time_limit" in P and P["episode_time_limit"]: # Time limit.
-        env = gym.wrappers.TimeLimit(env, P["episode_time_limit"])
+        agent.env = gym.wrappers.TimeLimit(agent.env, P["episode_time_limit"])
     if "video_save_freq" in P and P["video_save_freq"] > 0: # Video recording. NOTE: Must put this last.
-        env = gym.wrappers.Monitor(env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
+        agent.env = gym.wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
+
+    do_extra = "do_extra" in P and P["do_extra"]
 
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent: agent.train(P["sb_parameters"])
@@ -38,8 +42,7 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
         for ep in tqdm(range(P["num_episodes"])):
             render_this_ep = "render_freq" in P and P["render_freq"] > 0 and ep % P["render_freq"] == 0
             observe_this_ep = observer and P["observe_freq"] > 0 and ep % P["observe_freq"] == 0
-            # if P["save_video"] and render_this_ep: env = gym.wrappers.Monitor(env, f"./video/{run_name}/{ep}", force=True) # Record a new video every rendered episode.
-            state, reward_sum, t, done = env.reset(), 0, 0, False
+            state, reward_sum, t, done = agent.env.reset(), 0, 0, False
             
             # Get state representation.
             if renderer: state = renderer.get(first=True)
@@ -49,17 +52,15 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
             while not done:
                 
                 # Get action and advance state.
-                action, extra = agent.act(state, explore=train) # If not in training mode, turn exploration off.
-                try: action_for_env = action.item() # If action is 1D, just extract its item().
-                except: action_for_env = action # Otherwise, keep the whole vector.
-                next_state, reward, done, info = env.step(action_for_env)
+                action, extra = agent.act(state, explore=train, do_extra=do_extra) # If not in training mode, turn exploration off.
+                next_state, reward, done, info = agent.env.step(action)
 
                 # Send an observation to the observer if applicable.
                 if observe_this_ep:
-                    observer.observe(ep, t, state, action_for_env, next_state, reward, info, extra)
+                    observer.observe(ep, t, state, action, next_state, reward, info, extra)
 
                 # Render the environment if applicable.
-                if render_this_ep: env.render()
+                if render_this_ep: agent.env.render()
 
                 # Get state representation.
                 if done: next_state = None
@@ -87,7 +88,7 @@ def deploy(agent, env, P, train=False, renderer=None, observer=None):
 
         # Clean up.
         if renderer: renderer.close()
-        env.close()
+        agent.env.close()
 
     # Save final agent if requested.
     if "save_final_agent" in P and P["save_final_agent"]:

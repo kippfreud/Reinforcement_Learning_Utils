@@ -15,7 +15,7 @@ train_parameters = {
 }
 
 # Make environment.
-env = gym.make(train_parameters["env"]).unwrapped
+env = gym.make(train_parameters["env"]).unwrapped # Needed to impose custom time limit.
 if train_parameters["from_pixels"]:
     # If from_pixels, set up screen processor.
     from rlutils.common.rendering import Renderer
@@ -50,8 +50,9 @@ elif train_parameters["agent"] == "actor_critic":
 elif train_parameters["agent"] == "simple_model_based":
     from rlutils.specific.CartPole import reward_function
     agent_parameters = {
-        "reward_function": reward_function,
+        "random_mode_only": False,
+        "reward_function": reward_function
     }
-agent = rlutils.agent(train_parameters["agent"], env, agent_parameters)
+agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-run_name = rlutils.train(agent, env, train_parameters, renderer)
+rlutils.train(agent, train_parameters, renderer)

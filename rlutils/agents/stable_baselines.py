@@ -52,7 +52,7 @@ class StableBaselinesAgent(Agent):
 
         else: raise NotImplementedError()
 
-    def act(self, state, explore=True): 
+    def act(self, state, explore=True, do_extra=False): 
         action, _ = self.model.predict(state[0].numpy(), deterministic=(not explore))
         return action, {}
 

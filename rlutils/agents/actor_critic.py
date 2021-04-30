@@ -27,13 +27,13 @@ class ActorCriticAgent(Agent):
         self.last_s_l_v = None # State, log prob action and value.
         self.ep_losses = []
 
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection."""
         action_probs, value = self.pi(state), self.V(state)
         dist = Categorical(action_probs) 
         action = dist.sample()
         self.last_s_l_v = (state, dist.log_prob(action), value[0])
-        return action, {"pi": action_probs.cpu().detach().numpy()[0], "V": value[0].item()}
+        return action, {"pi": action_probs.cpu().detach().numpy()[0], "V": value[0].item()} if do_extra else {}
 
     def update_on_transition(self, next_state, reward):
         """Use the latest transition to update the policy and value network parameters."""

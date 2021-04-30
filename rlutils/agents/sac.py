@@ -28,7 +28,7 @@ class SacAgent(Agent):
         # Tracking variables.   
         self.ep_losses = []  
     
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection from Gaussian parameterised by output of self.pi."""
         state = state.to(self.device)
         action, _ = self._pi_to_action_and_log_prob(self.pi(state))

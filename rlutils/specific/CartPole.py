@@ -35,7 +35,7 @@ def screen_processor(screen, env):
     # Resize, and add a batch dimension (batch, channel, height, width).
     return resize(screen).unsqueeze(0).to(DEVICE)
 
-def reward_function(state):
+def reward_function(state, action):
     """Reward function for CartPole-v1."""
     theta_threshold_radians = 12 * 2 * np.pi / 360
     x_threshold = 2.4

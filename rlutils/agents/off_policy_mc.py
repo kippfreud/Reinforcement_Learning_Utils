@@ -17,16 +17,16 @@ class OffPolicyMCAgent(Agent):
         self.exploratory_action_prob = (1 - self.P["epsilon"]) / np.prod(self.action_shape)
         self.ep_transitions = []
 
-    def act_behaviour(self, state): 
+    def act_behaviour(self, state, explore=True, do_extra=False): 
         if np.random.rand() > self.P["epsilon"]:
             idx = tuple(np.random.randint(n) for n in self.action_shape)
         else:
             idx = tuple(self.pi[tuple(state)])
-        return self.env.action_space[idx]
+        return self.env.action_space[idx], {}
 
-    def act_target(self, state):
+    def act_target(self, state, explore=True, do_extra=False):
         idx = tuple(self.pi[tuple(state)])
-        return self.env.action_space[idx]
+        return self.env.action_space[idx], {}
 
     def update_on_episode(self):
         """xxx"""

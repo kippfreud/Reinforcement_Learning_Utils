@@ -32,6 +32,8 @@ class Observer:
         """Make an observation of a single timestep."""
         if self.empty: extra_dim_names = []
         # Basics: state, action, next_state, reward.
+        try: action = action.item() # If action is 1D, just extract its item().
+        except: pass    
         observation = [ep, t] \
                     + list(state.cpu().numpy().flatten()) \
                     + list([action] if self.num_actions == 1 else list(action)) \

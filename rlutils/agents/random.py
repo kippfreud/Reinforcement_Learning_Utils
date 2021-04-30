@@ -10,7 +10,7 @@ class RandomAgent(Agent):
         Agent.__init__(self, hyperparameters)
         self.a_last = self.env.action_space.sample()
 
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Random action selection."""
         a = self.env.action_space.sample()
         if self.P["inertia"] > 0:

@@ -1,8 +1,11 @@
 from ..agents._default_hyperparameters import default_hyperparameters
 
-def agent(agent, env, hyperparameters=dict()):
+from torch import load as torch_load
+
+
+def make(agent, env, hyperparameters=dict()):
     """
-    xxx
+    Make an instance of an agent class to train/deploy in env, overwriting default hyperparameters with those provided.
     """
     agent = agent.lower()
     # Special treatment for TD3 (a variant of DDPG).
@@ -22,3 +25,5 @@ def agent(agent, env, hyperparameters=dict()):
     elif agent == "simple_model_based": from ..agents.simple_model_based import SimpleModelBasedAgent as agent_class
     elif agent == "stable_baselines":   from ..agents.stable_baselines import StableBaselinesAgent as agent_class
     return agent_class(env, P)
+
+def load(path): return torch_load(path)

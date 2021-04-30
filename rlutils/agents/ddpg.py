@@ -38,19 +38,17 @@ class DdpgAgent(Agent):
         self.total_t = 0 # Used for policy update frequency for TD3.
         self.ep_losses = []  
     
-    def act(self, state, explore=True):
+    def act(self, state, explore=True, do_extra=False):
         """Deterministic action selection plus additive noise."""
         action_greedy = self.pi(state).cpu().detach().numpy()[0]
-        if explore: 
-            action = self.noise.get_action(action_greedy)
-            # Return greedy action and Q values in extra.
+        action = self.noise.get_action(action_greedy) if explore else action_greedy
+        if do_extra:
             sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
-            sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float))
+            sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
             extra = {"action_greedy":action_greedy, "Q":self.Q(sa).item(), "Q_greedy":self.Q(sa_greedy).item()}
-            if self.P["td3"]:
-                extra["Q2"] = self.Q2(sa).item(); extra["Q2_greedy"] = self.Q2(sa_greedy).item()
-            return action, extra
-        else: return action_greedy, {} 
+            if self.P["td3"]: extra["Q2"] = self.Q2(sa).item(); extra["Q2_greedy"] = self.Q2(sa_greedy).item()
+        else: extra = {}       
+        return action, extra 
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the pi and Q network parameters."""

@@ -1,4 +1,6 @@
 import rlutils
+from rlutils.specific.Pendulum import reward_function
+
 import torch
 import numpy as np
 import matplotlib as mpl
@@ -6,83 +8,75 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D 
 
 """
-NOTE: From cos(theta) alone, cannot loslessly reconstruct theta because could be +/-.
-However, because the problem is symmetrical can still study everything we need to.
+
+True phase plane plot for inverted pendulum with and without control: https://bit.ly/3vpoOVc
+
 """
 
 agent = rlutils.load("saved_runs/2021-04-29_17-14-46.agent")
 
 if False: # On-policy distribution
 
-    obs = rlutils.Observer(["cos_theta","sin_theta","theta_dot"], ["a"], extra=True)
-    rlutils.deploy(agent, {"num_episodes": 1, "do_extra": True, "observe_freq": 1}, observer=obs)
+    obs = rlutils.Observer(state_dims=3, action_dims=1, do_extra=True)
+    rlutils.deploy(agent, {"num_episodes": 2, "do_extra": True, "observe_freq": 1}, observer=obs)
     df = obs.dataframe()
 
-    # Don't need both cos and sin.
-    state = df[["cos_theta","theta_dot"]].values
+    theta = np.arccos(df["s_0"].values) * np.sign(df["s_1"].values) # Convert from cos(theta) and sin(theta) to theta.
+    theta_dot = df["s_2"].values
     action = df["a"].values
-    next_state_pred = df[["next_state_pred_0","next_state_pred_2"]].values
-    ds = next_state_pred - state
+
+    d_theta = (np.arccos(df["next_state_pred_0"].values) * np.sign(df["next_state_pred_1"].values)) - theta
+    d_theta_dot = df["next_state_pred_2"].values - theta_dot
 
     # Scatter states.
-    plt.figure(); plt.scatter(state[:,0], state[:,1], s=10)
-    plt.xlabel("$\cos(\\theta)$"); plt.ylabel("$\\frac{d\\theta}{dt}$")
+    plt.figure(); plt.scatter(theta, theta_dot, s=10)
+    plt.xlabel("$\\theta$"); plt.ylabel("$\\frac{d\\theta}{dt}$")
 
     # Colour arrows by action.
-    # mn = action.min(); rng = action.max() - mn
-    # c = [mpl.cm.coolwarm((a - mn)/rng) for a in action]
+    # # mn = action.min(); rng = action.max() - mn
+    # # c = [mpl.cm.coolwarm((a - mn)/rng) for a in action]
     c = "k"
 
     # Quiver plot model predictions.
-    fig = plt.figure(); ax = fig.gca(projection='3d')
-    plt.quiver(state[:,0], state[:,1], action, ds[:,0], ds[:,1], np.zeros_like(action), color=c)
-    ax.set_xlabel("$\cos(\\theta)$"); ax.set_ylabel("$\\frac{d\\theta}{dt}$"); ax.set_zlabel("Action")
+    fig = plt.figure(); ax = fig.gca(projection="3d")
+    plt.quiver(theta, theta_dot, action, d_theta, d_theta_dot, np.zeros_like(action), angles="xy", color=c)
+    ax.set_xlabel("$\\theta$"); ax.set_ylabel("$\\frac{d\\theta}{dt}$"); ax.set_zlabel("Action")
 
 if True: # Regular grid.
 
-    import numpy as np
-    import matplotlib.pyplot as plt
+    theta_dot, theta = np.mgrid[-4:4:30j, -0.5:0.5:30j] # Good for revealing errors near upright.
+    # theta_dot, theta = np.mgrid[-4:4:30j, -2:2:30j] 
+    # theta_dot, theta = np.mgrid[-4:4:30j, -np.pi:np.pi:30j] 
 
-    # fig, axes = plt.subplots(1, 3)
-    for n, action in enumerate([1]):
+    cos_theta, sin_theta = np.cos(theta), np.sin(theta)
 
-        theta_dot, cos_theta = np.mgrid[-4:4:10j, -1:1:10j] # Passing in complex number gives number of steps.
-        # sin_theta = np.sqrt(1 - cos_theta**2) # NOTE: Will always be in range [0,1].
+    for n, action in enumerate([0]):
         
         fig = plt.figure(); # ax = fig.gca(projection='3d')
-        for direction in [-1, 1]:
+       
+        next_state_pred = np.zeros((theta.shape[0], theta.shape[1], 3))
+        reward = np.zeros_like(theta)
+        for i in range(theta.shape[0]):
+            for j in range(theta.shape[1]):
+                state = torch.Tensor([[cos_theta[i,j], sin_theta[i,j], theta_dot[i,j]]])
+                next_state_pred[i,j] = agent.predict(state, [action]).numpy()
+                reward[i,j] = reward_function(state[0], action)
+
+        d_theta = (np.arccos(np.clip(next_state_pred[:,:,0], -1, 1)) * np.sign(next_state_pred[:,:,1])) - theta
+        d_theta_dot = d_theta_dot = next_state_pred[:,:,2] - theta_dot
+
+        # print(d_theta)
+
+        plt.imshow(reward, extent=(theta.min(), theta.max(), theta_dot.min(), theta_dot.max()), aspect="auto")#, alpha=0.1)
+
+        plt.quiver(theta, theta_dot, d_theta, d_theta_dot, angles="xy", width=1e-3)
         
-            sin_theta = direction * np.sqrt(1 - cos_theta**2)
+        # plt.scatter(theta, theta_dot, s=5, c="gray")
 
-            next_state_pred = np.zeros((10, 10, 3))
-            for i in range(10):
-                for j in range(10):
-                    next_state_pred[i,j] = agent.predict(torch.Tensor([[cos_theta[i,j], sin_theta[i,j], theta_dot[i,j]]]), [action]).numpy()
+        # plt.streamplot(theta, theta_dot, d_theta, d_theta_dot, color="k")#, color=abs(d_theta), cmap="inferno")
 
-            d_cos_theta = next_state_pred[:,:,0] - cos_theta 
-            d_sin_theta = next_state_pred[:,:,1] - sin_theta 
-            d_theta_dot = d_theta_dot = next_state_pred[:,:,2] - theta_dot
-
-            theta = direction * np.arccos(cos_theta)
-            d_theta = (direction * np.arccos(next_state_pred[:,:,0])) - theta
-
-            """
-
-            TODO: PLOT THETA NOT SIN AND COS
-
-            """
-
-            plt.quiver(theta, theta_dot, d_theta, d_theta_dot, width=1e-3)
-
-            # axes[n].set_title(f"Action = {action}")
-            # axes[n].streamplot(cos_theta, theta_dot, d_cos_theta, d_theta_dot, color=abs(d_theta_dot), cmap="inferno")
-            # axes[n].set_xlabel("$\cos(\\theta)$"); axes[n].set_ylabel("$\\frac{d\\theta}{dt}$")
-
-            
-            # plt.quiver(cos_theta.flatten(), sin_theta.flatten(), theta_dot.flatten(), 
-                    # d_cos_theta.flatten(), d_sin_theta.flatten(), d_theta_dot.flatten(), arrow_length_ratio=0.1)
+        plt.title(f"Action = {action}"); plt.xlabel("$\\theta$"); plt.ylabel("$\\frac{d\\theta}{dt}$")
+        plt.colorbar()
                    
-        break
-
-plt.tight_layout()
+# plt.tight_layout()
 plt.show()

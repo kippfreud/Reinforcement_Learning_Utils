@@ -33,7 +33,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
     if "video_save_freq" in P and P["video_save_freq"] > 0: # Video recording. NOTE: Must put this last.
         agent.env = gym.wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
 
-    do_extra = "do_extra" in P and P["do_extra"]
+    do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
 
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent: agent.train(P["sb_parameters"])
@@ -56,8 +56,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
                 next_state, reward, done, info = agent.env.step(action)
 
                 # Send an observation to the observer if applicable.
-                if observe_this_ep:
-                    observer.observe(ep, t, state, action, next_state, reward, info, extra)
+                if observe_this_ep: observer.observe(ep, t, state, action, next_state, reward, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: agent.env.render()
@@ -67,24 +66,18 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
                 elif renderer: next_state = renderer.get()
                 else: next_state = torch.from_numpy(next_state).float().to(agent.device).unsqueeze(0)
 
-                if train:
-                    # Perform some agent-specific operations on each timestep.
-                    agent.per_timestep(state, action, reward, next_state)
+                # Perform some agent-specific operations on each timestep if training.
+                if train: agent.per_timestep(state, action, reward, next_state)
 
                 # Update tracking variables.
-                reward_sum += np.float64(reward).sum()
-                state = next_state
-                t += 1
+                reward_sum += np.float64(reward).sum(); state = next_state; t += 1
 
-            if train:
-                # Perform some agent-specific operations on each episode.
-                results = agent.per_episode()    
-            else: results = {"logs":{}}  
+            # Perform some agent-specific operations on each episode if training.
+            if train: results = agent.per_episode()    
+            else: results = {"logs": {}}  
 
-            # Log to weights and biases.
-            if "wandb_monitor" in P and P["wandb_monitor"]: 
-                results["logs"]["reward_sum"] = reward_sum
-                wandb.log(results["logs"])
+            # Log to weights and biases if applicable.
+            if "wandb_monitor" in P and P["wandb_monitor"]: results["logs"]["reward_sum"] = reward_sum; wandb.log(results["logs"])
 
         # Clean up.
         if renderer: renderer.close()
@@ -92,9 +85,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
 
     # Save final agent if requested.
     if "save_final_agent" in P and P["save_final_agent"]:
-        if type(agent)==StableBaselinesAgent: 
-            agent.save(f"saved_runs/{run_name}") 
-        else:
-            torch.save(agent, f"saved_runs/{run_name}.agent")
+        if type(agent)==StableBaselinesAgent: agent.save(f"saved_runs/{run_name}") 
+        else: torch.save(agent, f"saved_runs/{run_name}.agent")
 
     return run_name # Return run name for reference.

@@ -83,7 +83,10 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
         if renderer: renderer.close()
         agent.env.close()
 
-    # Save final agent if requested.
+    # Save observer data if applicable.
+    if observer: observer.dataframe().to_csv(f"saved_runs/{run_name}.csv")
+
+    # Save final agent if applicable.
     if "save_final_agent" in P and P["save_final_agent"]:
         if type(agent)==StableBaselinesAgent: agent.save(f"saved_runs/{run_name}") 
         else: torch.save(agent, f"saved_runs/{run_name}.agent")

@@ -11,6 +11,7 @@ train_parameters = {
     "wandb_monitor": False,
     "render_freq": 0,
     "video_save_freq": 0,
+    "observe_freq": 0,
     "save_final_agent": False,
 }
 
@@ -55,4 +56,4 @@ elif train_parameters["agent"] == "simple_model_based":
     }
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-rlutils.train(agent, train_parameters, renderer)
+rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))

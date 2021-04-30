@@ -5,13 +5,14 @@ from rlutils.common.env_wrappers import NormaliseActionWrapper
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "agent": "simple_model_based",
+    "agent": "td3",
     "num_episodes": 100,
     "episode_time_limit": 200,
     "from_pixels": False,
-    "wandb_monitor": False,
+    "wandb_monitor": True,
     "render_freq": 0,
     "video_save_freq": 0,
+    "observe_freq": 1,
     "save_final_agent": True,
 }
 
@@ -27,7 +28,7 @@ if train_parameters["agent"] in ("ddpg","td3"):
         "lr_Q": 1e-3,
         "gamma": 0.99,
         "tau": 0.01,
-        "noise_params": ("ou", 0., 0.15, 0.5, 0.01, 50000),
+        "noise_params": ("ou", 0., 0.15, 0.5, 0.01, 100),
         # --- If TD3 enabled ---
         "td3_noise_std": 0.2,
         "td3_noise_clip": 0.5,
@@ -52,4 +53,4 @@ elif train_parameters["agent"] == "simple_model_based":
     }
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-rlutils.train(agent, train_parameters)
+rlutils.train(agent, train_parameters, observer=rlutils.Observer(state_dims=3, action_dims=1))

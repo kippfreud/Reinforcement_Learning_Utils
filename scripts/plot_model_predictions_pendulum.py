@@ -13,7 +13,7 @@ True phase plane plot for inverted pendulum with and without control: https://bi
 
 """
 
-agent = rlutils.load("saved_runs/2021-04-29_17-14-46.agent")
+agent = rlutils.load("saved_runs/pendulum_model.agent")
 
 if False: # On-policy distribution
 

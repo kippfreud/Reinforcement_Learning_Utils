@@ -22,8 +22,9 @@ class SimpleModelBasedAgent(Agent):
         # Create model network.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else:
-            adim = self.env.action_space.shape[0] if self.continuous_actions else 1 
-            net_code = [(self.env.observation_space.shape[0]+adim, 32), "R", (32, 64), "R", (64, self.env.observation_space.shape[0])]
+            self.state_dim = self.env.observation_space.shape[0]
+            action_dim = self.env.action_space.shape[0] if self.continuous_actions else 1 
+            net_code = [(self.state_dim+action_dim, 32), "R", (32, 64), "R", (64, self.state_dim)]
         self.model = SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for random transitions one for on-policy transitions.
         self.random_memory = ReplayMemory(self.P["random_replay_capacity"]) 
@@ -65,7 +66,7 @@ class SimpleModelBasedAgent(Agent):
         states_and_actions = torch.cat(tuple(torch.cat((x.state, torch.Tensor([x.action]).to(self.device)), dim=-1) for x in batch), dim=0).to(self.device)
         next_states = torch.cat(tuple(x.next_state for x in batch)).to(self.device)
         # Update model in the direction of the true change in state using MSE loss.
-        target = next_states - states_and_actions[:,:-1]
+        target = next_states - states_and_actions[:,:self.state_dim]
         prediction = self.model(states_and_actions)
         loss = F.mse_loss(prediction, target)
         self.model.optimise(loss)

@@ -1,6 +1,6 @@
 wandb/**
 video/**
-saved_runs/**
+runs/**
 __pycache__/
 .idea/
 *.out

@@ -11,10 +11,16 @@ P_DEFAULT = {"num_episodes": 100, "render_freq": 1}
 def train(agent, P=P_DEFAULT, renderer=None, observer=None):
     return deploy(agent, P, True, renderer, observer)
 
-def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
+def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_dir="runs"):
+
+    do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
+    do_wandb = "wandb_monitor" in P and P["wandb_monitor"]
+    do_render = "render_freq" in P and P["render_freq"] > 0
+    do_observe = observer and "observe_freq" in P and P["observe_freq"] > 0
+    do_save = "save_final_agent" in P and P["save_final_agent"]
 
     # Initialise weights and biases monitoring.
-    if "wandb_monitor" in P and P["wandb_monitor"]: 
+    if do_wandb: 
         assert not type(agent)==StableBaselinesAgent, "wandb monitoring not implemented for StableBaselinesAgent."
         import wandb
         run = wandb.init(project=P["project_name"], monitor_gym=True, config={**agent.P, **P})
@@ -33,15 +39,16 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
     if "video_save_freq" in P and P["video_save_freq"] > 0: # Video recording. NOTE: Must put this last.
         agent.env = gym.wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
 
-    do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
+    # Create directory for saving.
+    if do_observe or do_save: import os; os.makedirs(save_dir, exist_ok=True)
 
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent: agent.train(P["sb_parameters"])
     else:
         # Iterate through episodes.
         for ep in tqdm(range(P["num_episodes"])):
-            render_this_ep = "render_freq" in P and P["render_freq"] > 0 and ep % P["render_freq"] == 0
-            observe_this_ep = observer and P["observe_freq"] > 0 and ep % P["observe_freq"] == 0
+            render_this_ep = do_render and ep % P["render_freq"] == 0
+            observe_this_ep = do_observe and ep % P["observe_freq"] == 0
             state, reward_sum, t, done = agent.env.reset(), 0, 0, False
             
             # Get state representation.
@@ -77,18 +84,18 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None):
             else: results = {"logs": {}}  
 
             # Log to weights and biases if applicable.
-            if "wandb_monitor" in P and P["wandb_monitor"]: results["logs"]["reward_sum"] = reward_sum; wandb.log(results["logs"])
+            if do_wandb: results["logs"]["reward_sum"] = reward_sum; wandb.log(results["logs"])
 
         # Clean up.
         if renderer: renderer.close()
         agent.env.close()
 
     # Save observer data if applicable.
-    if observer: observer.dataframe().to_csv(f"saved_runs/{run_name}.csv")
+    if do_observe: observer.dataframe().to_csv(f"{save_dir}/{run_name}.csv")
 
     # Save final agent if applicable.
-    if "save_final_agent" in P and P["save_final_agent"]:
-        if type(agent)==StableBaselinesAgent: agent.save(f"saved_runs/{run_name}") 
-        else: torch.save(agent, f"saved_runs/{run_name}.agent")
+    if do_save:
+        if type(agent)==StableBaselinesAgent: agent.save(f"{save_dir}/{run_name}") 
+        else: torch.save(agent, f"{save_dir}/{run_name}.agent")
 
     return run_name # Return run name for reference.

@@ -44,9 +44,9 @@ if False: # On-policy distribution
 
 if True: # Regular grid.
 
-    theta_dot, theta = np.mgrid[-4:4:30j, -0.5:0.5:30j] # Good for revealing errors near upright.
+    # theta_dot, theta = np.mgrid[-4:4:30j, -0.5:0.5:30j] # Good for revealing errors near upright.
     # theta_dot, theta = np.mgrid[-4:4:30j, -2:2:30j] 
-    # theta_dot, theta = np.mgrid[-4:4:30j, -np.pi:np.pi:30j] 
+    theta_dot, theta = np.mgrid[-8:8:30j, -np.pi:np.pi:30j] 
 
     cos_theta, sin_theta = np.cos(theta), np.sin(theta)
 
@@ -68,15 +68,16 @@ if True: # Regular grid.
         # print(d_theta)
 
         plt.imshow(reward, extent=(theta.min(), theta.max(), theta_dot.min(), theta_dot.max()), aspect="auto")#, alpha=0.1)
+        plt.colorbar()
 
-        # plt.quiver(theta, theta_dot, d_theta, d_theta_dot, angles="xy", width=1e-3)
+        plt.quiver(theta, theta_dot, d_theta, d_theta_dot, angles="xy", width=1e-3)
         
         # plt.scatter(theta, theta_dot, s=5, c="gray")
 
-        plt.streamplot(theta, theta_dot, d_theta, d_theta_dot, color="k")#, color=abs(d_theta), cmap="inferno")
+        # plt.streamplot(theta, theta_dot, d_theta, d_theta_dot, color="k")#, color=abs(d_theta), cmap="inferno")
 
         plt.title(f"Action = {action}"); plt.xlabel("$\\theta$"); plt.ylabel("$\\frac{d\\theta}{dt}$")
-        plt.colorbar()
+        
                    
 # plt.tight_layout()
 plt.show()

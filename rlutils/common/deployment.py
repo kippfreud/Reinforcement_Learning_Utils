@@ -25,11 +25,15 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         import wandb
         run = wandb.init(project=P["project_name"], monitor_gym=True, config={**agent.P, **P})
         run_name = run.name
-        if train:
-            try: wandb.watch(agent.Q)
-            except: pass
-            try: wandb.watch(agent.pi)
-            except: pass
+        # if train: # TODO: Weight monitoring causes an error with STEVE.
+            # try: 
+                # if type(agent.Q) == list: # Handling Q ensembles.
+                    # for Q in agent.Q: wandb.watch(Q)
+                # else:
+                # wandb.watch(agent.Q)
+            # except: pass
+            # try: wandb.watch(agent.pi)
+            # except: pass
     else:
         import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")
 

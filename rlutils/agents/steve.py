@@ -74,6 +74,9 @@ class SteveAgent(DdpgAgent):
                 loss = F.mse_loss(prediction, target)
                 model.optimise(loss)
                 self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusion of DDPG methods.
+        
+        # TODO: Handle termination.
+        
         # Sample another batch, this time for training pi and Q.
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
         states = torch.cat(batch.state)
@@ -82,9 +85,6 @@ class SteveAgent(DdpgAgent):
         next_states = torch.cat(batch.next_state)
         # Use models to build (hopefully) better Q_targets by simulating forward dynamics.
         Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.Q_target)))
-
-        # TODO: Handle termination.
-
         with torch.no_grad(): 
             # Compute model-free targets.
             for j, target_net in enumerate(self.Q_target):
@@ -127,7 +127,6 @@ class SteveAgent(DdpgAgent):
         out["logs"]["model_usage"] = np.mean(self.ep_model_usage) if self.ep_model_usage else 0.
         out["logs"]["random_mode"] = int(self.random_mode)
         del self.ep_losses_model[:]; del self.ep_model_usage[:]
-        print(out)
         return out
 
     def _action_scale(self, action):

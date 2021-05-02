@@ -4,13 +4,13 @@ import random
 # TODO: element_with_done should be default for all algorithms.
 
 # Structure of a memory element.
-element = namedtuple('element', ('state', 'action', 'reward', 'next_state'))
-element_with_done = namedtuple('element', ('state', 'action', 'reward', 'next_state', 'done'))
+element_without_done = namedtuple('element', ('state', 'action', 'reward', 'next_state'))
+element = namedtuple('element', ('state', 'action', 'reward', 'next_state', 'done'))
 
 class ReplayMemory:
     def __init__(self, capacity, include_done=False):
         self.capacity = capacity
-        self.element = element_with_done if include_done else element 
+        self.element = element if include_done else element_without_done 
         self.memory = []
         self.position = 0
 

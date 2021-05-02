@@ -1,6 +1,7 @@
 import gym
 import rlutils
 from rlutils.common.env_wrappers import NormaliseActionWrapper
+from rlutils.specific.Pendulum import reward_function
 
 train_parameters = {
     "project_name": "pendulum",
@@ -13,7 +14,7 @@ train_parameters = {
     "render_freq": 0,
     "video_save_freq": 0,
     "observe_freq": 0,
-    "save_final_agent": 0,
+    "save_final_agent": True,
 }
 
 # Make environment.
@@ -21,13 +22,11 @@ env = gym.make(train_parameters["env"]).unwrapped # Needed to impose custom time
 
 if train_parameters["agent"] in ("ddpg","td3","sac","steve"):
     env = NormaliseActionWrapper(env) # Actions in [-1, 1]
-if train_parameters["agent"] in ("simple_model_based","steve"):
-    from rlutils.specific.Pendulum import reward_function # Provide reward function.
 
 agent_parameters = {}
 agent_parameters["ddpg"] = {
-    "replay_capacity": 10000,
-    "batch_size": 128,
+    "replay_capacity": 5000,
+    "batch_size": 32,
     "lr_pi": 1e-4,
     "lr_Q": 1e-3,
     "gamma": 0.99,

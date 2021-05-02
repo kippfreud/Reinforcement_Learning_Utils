@@ -84,8 +84,7 @@ class DdpgAgent(Agent):
         value_loss_sum = 0.
         for Q in self.Q:    
             # Update value in the direction of TD error. 
-            Q_values = Q(_sa_concat(states, actions)).squeeze()
-            value_loss = F.smooth_l1_loss(Q_values, Q_targets)
+            value_loss = F.smooth_l1_loss(Q(_sa_concat(states, actions)).squeeze(), Q_targets)
             Q.optimise(value_loss)
             value_loss_sum += value_loss.item()
         policy_loss = np.nan

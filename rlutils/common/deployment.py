@@ -69,12 +69,11 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
                 if render_this_ep: agent.env.render()
 
                 # Get state representation.
-                if done: next_state = None
-                elif renderer: next_state = renderer.get()
+                if renderer: next_state = renderer.get()
                 else: next_state = torch.from_numpy(next_state).float().to(agent.device).unsqueeze(0)
 
                 # Perform some agent-specific operations on each timestep if training.
-                if train: agent.per_timestep(state, action, reward, next_state)
+                if train: agent.per_timestep(state, action, reward, next_state, done)
 
                 # Update tracking variables.
                 reward_sum += np.float64(reward).sum(); state = next_state; t += 1

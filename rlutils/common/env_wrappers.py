@@ -8,9 +8,9 @@ class NormaliseActionWrapper(gym.ActionWrapper):
     """
     def __init__(self, env):
         super().__init__(env)
-        self.act_k = (self.action_space.high - self.action_space.low)/ 2.
+        self.act_k = (self.action_space.high - self.action_space.low) / 2.
         self.act_k_inv = 2./(self.action_space.high - self.action_space.low)
-        self.act_b = (self.action_space.high + self.action_space.low)/ 2.
+        self.act_b = (self.action_space.high + self.action_space.low) / 2.
 
     def action(self, action): 
         return self.act_k * action + self.act_b

@@ -72,7 +72,7 @@ class ReinforceAgent(Agent):
         elif self.P["baseline"] == "adv": return (returns - values).detach() # Advantage (subtract value prediction).
         else: raise NotImplementedError("Baseline method not recognised.")
 
-    def per_timestep(self, state, action, reward, next_state):
+    def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
         self.ep_rewards.append(reward)
 

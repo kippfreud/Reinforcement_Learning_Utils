@@ -10,7 +10,7 @@ def make(agent, env, hyperparameters=dict()):
     agent = agent.lower()
     # Special treatment for TD3 (a variant of DDPG).
     if agent == "td3": hyperparameters["td3"] = True; agent = "ddpg"
-    assert agent in default_hyperparameters
+    assert agent in default_hyperparameters, "Agent type not recognised."
     # Overwrite default hyperparameters where applicable.
     P = default_hyperparameters[agent]
     for k, v in hyperparameters.items(): P[k] = v
@@ -24,6 +24,7 @@ def make(agent, env, hyperparameters=dict()):
     elif agent == "sac":                from ..agents.sac import SacAgent as agent_class
     elif agent == "simple_model_based": from ..agents.simple_model_based import SimpleModelBasedAgent as agent_class
     elif agent == "stable_baselines":   from ..agents.stable_baselines import StableBaselinesAgent as agent_class
+    elif agent == "steve":              from ..agents.steve import SteveAgent as agent_class
     return agent_class(env, P)
 
 def load(path): return torch_load(path)

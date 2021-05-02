@@ -62,5 +62,5 @@ class StableBaselinesAgent(Agent):
     def load(self, path): self.model = self.model_class.load(path)
 
     # The regular learning methods shouldn't be used.
-    def per_timestep(self, state, action, reward, next_state): raise NotImplementedError("Use agent.train to train!")
+    def per_timestep(self, state, action, reward, next_state, done): raise NotImplementedError("Use agent.train to train!")
     def per_episode(self): raise NotImplementedError("Use agent.train to train!")

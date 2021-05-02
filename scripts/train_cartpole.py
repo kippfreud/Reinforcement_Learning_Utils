@@ -54,6 +54,7 @@ elif train_parameters["agent"] == "simple_model_based":
         "random_mode_only": False,
         "reward_function": reward_function
     }
+
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))
+# rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))

@@ -79,8 +79,9 @@ class SacAgent(Agent):
             target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
         return policy_loss.item(), value_loss.item() + value2_loss.item()
 
-    def per_timestep(self, state, action, reward, next_state):
+    def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
+        if done: next_state = None # TODO: Improve implementation.
         state = state.to(self.device)
         action = torch.tensor([action]).float().to(self.device)
         reward = torch.tensor([reward]).float().to(self.device)

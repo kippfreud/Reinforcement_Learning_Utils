@@ -54,8 +54,9 @@ class ActorCriticAgent(Agent):
         self.pi.optimise(policy_loss)
         return policy_loss.item(), value_loss.item()
 
-    def per_timestep(self, state, action, reward, next_state):
+    def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
+        if done: next_state = None # TODO: Improve implementation.
         self.ep_losses.append(self.update_on_transition(next_state, torch.tensor([reward], device=self.device, dtype=torch.float)))
         self.last_s_l_v = None 
 

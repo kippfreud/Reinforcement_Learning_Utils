@@ -5,15 +5,15 @@ from rlutils.common.env_wrappers import NormaliseActionWrapper
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "agent": "td3",
-    "num_episodes": 100,
+    "agent": "steve",
+    "num_episodes": 5,
     "episode_time_limit": 200,
     "from_pixels": False,
-    "wandb_monitor": True,
+    "wandb_monitor": False,
     "render_freq": 0,
     "video_save_freq": 0,
-    "observe_freq": 1,
-    "save_final_agent": True,
+    "observe_freq": 0,
+    "save_final_agent": 0,
 }
 
 # Make environment.
@@ -51,6 +51,14 @@ elif train_parameters["agent"] == "simple_model_based":
         "random_mode_only": True,
         "reward_function": reward_function,
     }
+elif train_parameters["agent"] == "steve":
+    env = NormaliseActionWrapper(env) # Actions in [-1, 1]
+    from rlutils.specific.Pendulum import reward_function
+    agent_parameters = {
+        "reward_function": reward_function,
+        "ddpg_parameters": {"batch_size": 32}
+    }
+
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
-print(agent)
+# print(agent)
 rlutils.train(agent, train_parameters, observer=rlutils.Observer(state_dims=3, action_dims=1))

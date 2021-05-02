@@ -68,7 +68,7 @@ default_hyperparameters = {
   "simple_model_based": {  
     "random_replay_capacity": 2000, # Size of random replay buffer (disables random mode when full).
     "batch_size": 256,
-    "steps_between_update": 10,
+    "model_freq": 10, # Number of steps between model updates.
     "lr_model": 1e-3, # Learning rate for dynamics model.
     "random_mode_only": False,
     # --- If not random_mode_only ---
@@ -82,5 +82,15 @@ default_hyperparameters = {
   "stable_baselines": { # NOTE: Other defaults specified in StableBaselines library.
     "model_class": "DQN",
     "verbose": True
+  },
+
+  "steve": {
+    "num_random_steps": 1, # Number of steps before disabling random mode and starting learning.
+    "num_models": 2, # Number of parallel dynamics models to train.
+    "model_freq": 1, # Number of steps between model updates.
+    "lr_model": 1e-3, # Learning rate for dynamics model.
+    "horizon": 5, # Maximum number of model steps to run to produce Q values.
+    "ddpg_parameters": {} # STEVE is built around DDPG. {} means defaults adopted.
   }
+
 }

@@ -18,5 +18,5 @@ class RandomAgent(Agent):
             self.a_last = a
         return a, {}
 
-    def per_timestep(self, state, action, reward, next_state): return
+    def per_timestep(self, state, action, reward, next_state, done): return
     def per_episode(self): return

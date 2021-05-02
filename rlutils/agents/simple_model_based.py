@@ -33,7 +33,7 @@ class SimpleModelBasedAgent(Agent):
             self.batch_split = (round(self.P["batch_size"] * self.P["batch_ratio"]), round(self.P["batch_size"] * (1-self.P["batch_ratio"])))
         # Tracking variables.
         self.random_mode = True
-        self.total_t = 0 # Used for steps_between_update.
+        self.total_t = 0 # Used for model_freq.
         self.ep_losses = []
 
     def act(self, state, explore=True, do_extra=False):
@@ -63,16 +63,16 @@ class SimpleModelBasedAgent(Agent):
         else: # After random mode, sample from both memories according to self.batch_split.
             if len(self.memory) < self.batch_split[0]: return 
             batch = list(self.memory.sample(self.batch_split[0])) + list(self.random_memory.sample(self.batch_split[1]))
+        # Update model in the direction of the true change in state using MSE loss.
         states_and_actions = torch.cat(tuple(torch.cat((x.state, torch.Tensor([x.action]).to(self.device)), dim=-1) for x in batch), dim=0).to(self.device)
         next_states = torch.cat(tuple(x.next_state for x in batch)).to(self.device)
-        # Update model in the direction of the true change in state using MSE loss.
         target = next_states - states_and_actions[:,:self.state_dim]
         prediction = self.model(states_and_actions)
         loss = F.mse_loss(prediction, target)
         self.model.optimise(loss)
         return loss.item()
 
-    def per_timestep(self, state, action, reward, next_state):
+    def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
         state = state.to(self.device)
         # action = torch.tensor([action]).float().to(self.device)
@@ -80,11 +80,10 @@ class SimpleModelBasedAgent(Agent):
         if not self.P["random_mode_only"] and self.random_mode and len(self.random_memory) >= self.P["random_replay_capacity"]: 
             self.random_mode = False
             print("Random data collection complete.")
-        if next_state != None: 
-            if not self.continuous_actions: action = [action]
-            if self.random_mode: self.random_memory.add(state, action, reward, next_state)
-            else: self.memory.add(state, action, reward, next_state)
-        if self.total_t % self.P["steps_between_update"] == 0:
+        if not self.continuous_actions: action = [action]
+        if self.random_mode: self.random_memory.add(state, action, reward, next_state)
+        else: self.memory.add(state, action, reward, next_state)
+        if self.total_t % self.P["model_freq"] == 0:
             loss = self.update_on_batch()
             if loss: self.ep_losses.append(loss); print(len(self.random_memory), loss)
         self.total_t += 1
@@ -108,6 +107,4 @@ class SimpleModelBasedAgent(Agent):
                 rollout_state = self.predict(rollout_state, rollout_action)
                 rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state, rollout_action)                
             returns.append(rollout_return)
-        return returns, first_actions
-
-    
+        return returns, first_actions    

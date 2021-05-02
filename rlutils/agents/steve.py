@@ -1,6 +1,7 @@
 """
 Stochastic ensemble value expansion (STEVE). From:
     "Sample-Efficient Reinforcement Learning with Stochastic Ensemble Value Expansion"
+NOTE: Currently requires reward function to be provided rather than learned.
 """
 
 from .ddpg import DdpgAgent, _sa_concat # STEVE inherits from DDPG.
@@ -17,9 +18,10 @@ class SteveAgent(DdpgAgent):
         assert "reward_function" in hyperparameters, "Need to provide reward function."
         # Overwrite default hyperparameters for DDPG.
         P = default_hyperparameters["ddpg"]
+        for k, v in default_hyperparameters["steve"]["ddpg_parameters"].items(): P[k] = v
         for k, v in hyperparameters["ddpg_parameters"].items(): P[k] = v
         DdpgAgent.__init__(self, env, P)
-        self.target_nets = [self.Q_target] + ([self.Q2_target] if self.P["td3"] else [])
+        assert len(self.Q_target) > 1, "Need multiple Q networks to do variance for horizon = 0."
         # Add parameters specific to STEVE.
         for k, v in hyperparameters.items(): 
             if k != "ddpg_parameters": self.P[k] = v
@@ -35,6 +37,7 @@ class SteveAgent(DdpgAgent):
         # Tracking variables.
         self.random_mode = True
         self.ep_losses_model = []
+        self.ep_model_usage = []
 
     def act(self, state, explore=True, do_extra=False):
         """Either random or DDPG action selection."""
@@ -51,7 +54,7 @@ class SteveAgent(DdpgAgent):
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model, pi and Q network parameters."""
 
-        # TODO: NORMALISATION
+        # TODO: Batch normalisation of state dimensions.
 
         if len(self.memory) < self.P["batch_size"]: return
         if self.total_t % self.P["model_freq"] == 0:
@@ -76,13 +79,13 @@ class SteveAgent(DdpgAgent):
         reward = torch.cat(batch.reward).reshape(-1,1)
         next_states = torch.cat(batch.next_state)
         # Use models to build (hopefully) better Q_targets by simulating forward dynamics.
-        Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.target_nets)))
+        Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.Q_target)))
 
-        # TODO: Handle terminal.
+        # TODO: Handle termination.
 
         with torch.no_grad(): 
             # Compute model-free targets.
-            for j, target_net in enumerate(self.target_nets):
+            for j, target_net in enumerate(self.Q_target):
                 next_actions = self.pi_target(next_states) # Select a' using the target pi network.
                 # Same target for all models at this point.
                 Q_targets[:,0,:,j] = (reward + self.P["gamma"] * target_net(_sa_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
@@ -97,11 +100,12 @@ class SteveAgent(DdpgAgent):
                     sim_states += model(_sa_concat(sim_states, sim_actions)) # Model predicts derivatives.
                     sim_actions = self.pi_target(sim_states)
                     # Store Q_targets for this horizon.
-                    for j, target_net in enumerate(self.target_nets): 
+                    for j, target_net in enumerate(self.Q_target): 
                         Q_targets[:,h,i,j] = (g + ((self.P["gamma"] ** (h+1)) * target_net(_sa_concat(sim_states, sim_actions)))).squeeze()
         # Inverse variance weighting of horizons. 
-        rollout_var = Q_targets.var(dim=(2, 3))
-        normalised_weights = rollout_var / rollout_var.sum(dim=1, keepdims=True)
+        inverse_var = 1 / Q_targets.var(dim=(2, 3))
+        normalised_weights = inverse_var / inverse_var.sum(dim=1, keepdims=True)
+        self.ep_model_usage.append(1 - normalised_weights[:,0].mean().item())
         Q_targets = (Q_targets.mean(dim=(2, 3)) * normalised_weights).sum(dim=1)
         # Send Q_targets to DDPG update function and return losses.
         return DdpgAgent.update_on_batch(self, states, actions, Q_targets)
@@ -116,11 +120,12 @@ class SteveAgent(DdpgAgent):
     def per_episode(self):
         """Operations to perform on each episode end during training."""
         out = DdpgAgent.per_episode(self)
-        if self.ep_losses_model: out["model_loss"] = np.mean(self.ep_losses_model)
-        else: out["model_loss"] = 0.
-        del self.ep_losses_model[:]
-        out["random_mode"] = int(self.random_mode)
-        print(out)
+        if self.ep_losses_model: out["logs"]["model_loss"] = np.mean(self.ep_losses_model)
+        else: out["logs"]["model_loss"] = 0.
+        if self.ep_model_usage: out["logs"]["model_usage"] = np.mean(self.ep_model_usage)
+        else: out["logs"]["model_usage"] = 0.
+        del self.ep_losses_model[:]; del self.ep_model_usage[:]
+        out["logs"]["random_mode"] = int(self.random_mode)
         return out
 
     def _action_scale(self, action):

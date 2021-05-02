@@ -26,10 +26,10 @@ class DdpgAgent(Agent):
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
         self.pi_target = SequentialNetwork(code=net_code_pi, eval_only=True).to(self.device)
         self.pi_target.load_state_dict(self.pi.state_dict()) # Clone.
-        self.Q, self.Q_target = self._make_Q(net_code_Q)
-        if self.P["td3"]:
-            # For TD3 we have two Q networks, each with their corresponding targets.
-            self.Q2, self.Q2_target = self._make_Q(net_code_Q)
+        self.Q, self.Q_target = [], []
+        for i in range(2 if self.P["td3"] else 1): # For TD3 we have two Q networks, each with their corresponding targets.
+            Q, Q_target = self._make_Q(net_code_Q)
+            self.Q.append(Q); self.Q_target.append(Q_target)
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"], include_done=True) # TODO: element_with_done should be default for all algorithms.
         # Create noise process for exploration.
@@ -47,8 +47,9 @@ class DdpgAgent(Agent):
         if do_extra:
             sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
             sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
-            extra = {"action_greedy":action_greedy, "Q":self.Q(sa).item(), "Q_greedy":self.Q(sa_greedy).item()}
-            if self.P["td3"]: extra["Q2"] = self.Q2(sa).item(); extra["Q2_greedy"] = self.Q2(sa_greedy).item()
+            extra = {"action_greedy":action_greedy}
+            for i, Q in zip(["", "2"], self.Q):
+                extra[f"Q{i}"] = Q(sa).item(); extra[f"Q{i}_greedy"] = Q(sa_greedy).item()
         else: extra = {}       
         return action, extra 
 
@@ -72,42 +73,33 @@ class DdpgAgent(Agent):
                 noise = (torch.randn_like(nonterminal_next_actions) * self.P["td3_noise_std"]
                         ).clamp(-self.P["td3_noise_clip"], self.P["td3_noise_clip"])
                 nonterminal_next_actions = (nonterminal_next_actions + noise).clamp(-1, 1)
-            # Use target Q network to compute Q_target(s', a') for each nonterminal next state.    
-            next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
-            next_Q_values[nonterminal_mask] = self.Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
-            if self.P["td3"]: 
-                # For TD3 we use both target Q networks and take the minimum value.
-                # This is the "clipped double Q trick".
-                next_Q2_values = torch.zeros(self.P["batch_size"], device=self.device)
-                next_Q2_values[nonterminal_mask] = self.Q2_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
-                next_Q_values = torch.min(next_Q_values, next_Q2_values)        
+
+            next_Q_values = torch.zeros((self.P["batch_size"], len(self.Q_target)), device=self.device)
+            for i, Q_target in enumerate(self.Q_target):
+                # Use target Q networks to compute Q_target(s', a') for each nonterminal next state.    
+                next_Q_values[nonterminal_mask,i] = Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
             # Compute target = reward + discounted Q_target(s', a').
-            Q_targets = rewards + (self.P["gamma"] * next_Q_values)
-        # Update value in the direction of TD error. 
-        Q_values = self.Q(_sa_concat(states, actions)).squeeze()
-        value_loss = F.smooth_l1_loss(Q_values, Q_targets)
-        self.Q.optimise(value_loss)
-        if self.P["td3"]: 
-            # For TD3, do the same for the second Q network.
-            Q2_values = self.Q2(_sa_concat(states, actions)).squeeze()
-            value2_loss = F.smooth_l1_loss(Q2_values, Q_targets)
-            self.Q2.optimise(value2_loss)
+            # For TD3 we use two target Q networks and take the minimum value. This is the "clipped double Q trick".
+            Q_targets = rewards + (self.P["gamma"] * next_Q_values.min(dim=1)[0])
+        value_loss_sum = 0.
+        for Q in self.Q:    
+            # Update value in the direction of TD error. 
+            Q_values = Q(_sa_concat(states, actions)).squeeze()
+            value_loss = F.smooth_l1_loss(Q_values, Q_targets)
+            Q.optimise(value_loss)
+            value_loss_sum += value_loss.item()
         policy_loss = np.nan
         if (not self.P["td3"]) or (self.total_t % self.P["td3_policy_freq"] == 0): 
             # For TD3, only update policy and targets every N timesteps.
             # Update policy in the direction of increasing value according to self.Q (the policy gradient).
-            policy_loss = -self.Q(_sa_concat(states, self.pi(states))).mean()
+            policy_loss = -self.Q[0](_sa_concat(states, self.pi(states))).mean() # NOTE: Using first Q network only.
             self.pi.optimise(policy_loss)
             policy_loss = policy_loss.item()
         # Perform soft updates on targets.
-        for target_param, param in zip(self.pi_target.parameters(), self.pi.parameters()):
-            target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
-        for target_param, param in zip(self.Q_target.parameters(), self.Q.parameters()):
-            target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
-        if self.P["td3"]:
-            for target_param, param in zip(self.Q2_target.parameters(), self.Q2.parameters()):
+        for net, target in zip([self.pi]+self.Q, [self.pi_target]+self.Q_target):
+            for param, target_param in zip(net.parameters(), target.parameters()):
                 target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
-        return policy_loss, value_loss.item() + value2_loss.item() if self.P["td3"] else value_loss.item()
+        return policy_loss, value_loss_sum
 
     def per_timestep(self, state, action, reward, next_state, done, do_update=True):
         """Operations to perform on each timestep during training."""

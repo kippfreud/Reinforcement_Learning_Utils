@@ -55,7 +55,7 @@ class SimpleModelBasedAgent(Agent):
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model network parameters."""
 
-        # TODO: NORMALISATION
+        # TODO: Batch normalisation of state dimensions.
 
         if self.random_mode: # During random mode, just sample from random memory.   
             if len(self.random_memory) < self.P["batch_size"]: return 

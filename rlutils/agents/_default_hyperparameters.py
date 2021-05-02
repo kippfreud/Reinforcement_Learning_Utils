@@ -85,12 +85,12 @@ default_hyperparameters = {
   },
 
   "steve": {
-    "num_random_steps": 1, # Number of steps before disabling random mode and starting learning.
+    "num_random_steps": 1000, # Number of steps before disabling random mode and starting learning.
     "num_models": 2, # Number of parallel dynamics models to train.
     "model_freq": 1, # Number of steps between model updates.
     "lr_model": 1e-3, # Learning rate for dynamics model.
     "horizon": 5, # Maximum number of model steps to run to produce Q values.
-    "ddpg_parameters": {} # STEVE is built around DDPG. {} means defaults adopted.
+    "ddpg_parameters": {"td3": True} # STEVE is built around DDPG, and needs multiple Q_target networks.
   }
 
 }

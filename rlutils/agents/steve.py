@@ -34,6 +34,8 @@ class SteveAgent(DdpgAgent):
         # Parameters for action scaling.
         self.act_k = (self.env.action_space.high - self.env.action_space.low) / 2.
         self.act_b = (self.env.action_space.high + self.env.action_space.low) / 2.
+        # Small float used to prevent div/0 errors.
+        self.eps = np.finfo(np.float32).eps.item() 
         # Tracking variables.
         self.random_mode = True
         self.ep_losses_model = []
@@ -103,7 +105,8 @@ class SteveAgent(DdpgAgent):
                     for j, target_net in enumerate(self.Q_target): 
                         Q_targets[:,h,i,j] = (g + ((self.P["gamma"] ** (h+1)) * target_net(_sa_concat(sim_states, sim_actions)))).squeeze()
         # Inverse variance weighting of horizons. 
-        inverse_var = 1 / Q_targets.var(dim=(2, 3))
+        var = Q_targets.var(dim=(2, 3)) + self.eps # Prevent div/0 error.
+        inverse_var = 1 / var
         normalised_weights = inverse_var / inverse_var.sum(dim=1, keepdims=True)
         self.ep_model_usage.append(1 - normalised_weights[:,0].mean().item())
         Q_targets = (Q_targets.mean(dim=(2, 3)) * normalised_weights).sum(dim=1)
@@ -120,12 +123,11 @@ class SteveAgent(DdpgAgent):
     def per_episode(self):
         """Operations to perform on each episode end during training."""
         out = DdpgAgent.per_episode(self)
-        if self.ep_losses_model: out["logs"]["model_loss"] = np.mean(self.ep_losses_model)
-        else: out["logs"]["model_loss"] = 0.
-        if self.ep_model_usage: out["logs"]["model_usage"] = np.mean(self.ep_model_usage)
-        else: out["logs"]["model_usage"] = 0.
-        del self.ep_losses_model[:]; del self.ep_model_usage[:]
+        out["logs"]["model_loss"] = np.mean(self.ep_losses_model) if self.ep_losses_model else 0.
+        out["logs"]["model_usage"] = np.mean(self.ep_model_usage) if self.ep_model_usage else 0.
         out["logs"]["random_mode"] = int(self.random_mode)
+        del self.ep_losses_model[:]; del self.ep_model_usage[:]
+        print(out)
         return out
 
     def _action_scale(self, action):

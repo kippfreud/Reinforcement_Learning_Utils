@@ -14,7 +14,6 @@ import torch.nn.functional as F
 class ReinforceAgent(Agent):
     def __init__(self, env, hyperparameters):
         Agent.__init__(self, env, hyperparameters)
-        self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi network (and V if using advantage baselining).
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
             # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
@@ -26,6 +25,8 @@ class ReinforceAgent(Agent):
         if self.P["baseline"] == "adv":
             self.V = SequentialNetwork(code=net_code_V, lr=self.P["lr_V"]).to(self.device)
         else: self.V = None
+        # Small float used to prevent div/0 errors.
+        self.eps = np.finfo(np.float32).eps.item() 
         # Tracking variables.
         self.ep_predictions = [] # Log prob actions (and value).
         self.ep_rewards = []

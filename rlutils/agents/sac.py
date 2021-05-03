@@ -24,14 +24,14 @@ class SacAgent(Agent):
         self.Q, self.Q_target = self._make_Q(net_code_Q)
         self.Q2, self.Q2_target = self._make_Q(net_code_Q)
         # Create replay memory.
-        self.memory = ReplayMemory(self.P["replay_capacity"]) 
+        self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.   
         self.ep_losses = []  
     
     def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection from Gaussian parameterised by output of self.pi."""
         state = state.to(self.device)
-        action, _ = self._pi_to_action_and_log_prob(self.pi(state))
+        action, log_prob = self._pi_to_action_and_log_prob(self.pi(state))
         return action.cpu().detach().numpy()[0], {}
 
     def update_on_batch(self):
@@ -42,9 +42,12 @@ class SacAgent(Agent):
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
-        # Identify nonterminal states (note that replay memory elements are initialised to None).
-        nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
-        nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
+        next_states = torch.cat(batch.next_state)
+        nonterminal_mask = ~torch.cat(batch.done)
+        nonterminal_next_states = next_states[nonterminal_mask]
+        # # Identify nonterminal states (note that replay memory elements are initialised to None).
+        # nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
+        # nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
         # Select a' using the current pi network.
         nonterminal_next_actions, nonterminal_next_log_probs = self._pi_to_action_and_log_prob(self.pi(nonterminal_next_states))
         # Use both target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. 
@@ -81,11 +84,16 @@ class SacAgent(Agent):
 
     def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
-        if done: next_state = None # TODO: Improve implementation.
-        state = state.to(self.device)
-        action = torch.tensor([action]).float().to(self.device)
-        reward = torch.tensor([reward]).float().to(self.device)
-        self.memory.add(state, action, reward, next_state)
+        # if done: next_state = None # TODO: Improve implementation.
+        # state = state.to(self.device)
+        # action = torch.tensor([action]).float().to(self.device)
+        # reward = torch.tensor([reward]).float().to(self.device)
+        # self.memory.add(state, action, reward, next_state)
+        self.memory.add(state, 
+                        torch.tensor([action], device=self.device, dtype=torch.float), 
+                        torch.tensor([reward], device=self.device, dtype=torch.float), 
+                        next_state, 
+                        torch.tensor([done], device=self.device, dtype=torch.bool))
         losses = self.update_on_batch()
         if losses: self.ep_losses.append(losses)
 

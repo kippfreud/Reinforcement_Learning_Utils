@@ -13,7 +13,7 @@ True phase plane plot for inverted pendulum with and without control: https://bi
 
 """
 
-agent = rlutils.load("runs/pendulum_model.agent")
+agent = rlutils.load("runs/crisp-gorge-50.agent")
 
 if False: # On-policy distribution
 
@@ -44,30 +44,38 @@ if False: # On-policy distribution
 
 if True: # Regular grid.
 
-    # theta_dot, theta = np.mgrid[-4:4:30j, -0.5:0.5:30j] # Good for revealing errors near upright.
+    theta_dot, theta = np.mgrid[-4:4:60j, -0.5:0.5:60j] # Good for revealing errors near upright.
     # theta_dot, theta = np.mgrid[-4:4:30j, -2:2:30j] 
-    theta_dot, theta = np.mgrid[-8:8:30j, -np.pi:np.pi:30j] 
+    # theta_dot, theta = np.mgrid[-8:8:30j, -np.pi:np.pi:30j] 
 
     cos_theta, sin_theta = np.cos(theta), np.sin(theta)
 
-    for n, action in enumerate([-2,0,2]):
+    for n, action in enumerate([0,"$\pi$"]):
         
         fig = plt.figure(); # ax = fig.gca(projection='3d')
        
-        next_state_pred = np.zeros((theta.shape[0], theta.shape[1], 3))
+        next_state_pred = np.zeros((theta.shape[0], theta.shape[1], agent.P["num_models"], 3))
         reward = np.zeros_like(theta)
         for i in range(theta.shape[0]):
             for j in range(theta.shape[1]):
                 state = torch.Tensor([[cos_theta[i,j], sin_theta[i,j], theta_dot[i,j]]])
-                next_state_pred[i,j] = agent.predict(state, [action]).numpy()
-                reward[i,j] = reward_function(state[0], action)
+                if action == "$\pi$": a = agent.act(state, explore=False)[0].item()
+                else: a = action
+                next_state_pred[i,j] = agent.predict(state, [a], mode="all").numpy()
+                reward[i,j] = reward_function(state[0], a)
+        
+        var = next_state_pred.var(axis=2)
+        var_norm_sum = (var / var.max(axis=(0,1))).sum(axis=2)
 
-        d_theta = (np.arccos(np.clip(next_state_pred[:,:,0], -1, 1)) * np.sign(next_state_pred[:,:,1])) - theta
-        d_theta_dot = d_theta_dot = next_state_pred[:,:,2] - theta_dot
+        d_theta = (np.arccos(np.clip(next_state_pred[:,:,:,0].mean(axis=2), -1, 1)) * np.sign(next_state_pred[:,:,:,1].mean(axis=2))) - theta
+        d_theta_dot = d_theta_dot = next_state_pred[:,:,:,2].mean(axis=2) - theta_dot
 
         # print(d_theta)
 
-        plt.imshow(reward, extent=(theta.min(), theta.max(), theta_dot.min(), theta_dot.max()), aspect="auto")#, alpha=0.1)
+        plt.imshow(
+                    # reward, 
+                    var_norm_sum,
+            extent=(theta.min(), theta.max(), theta_dot.min(), theta_dot.max()), aspect="auto", cmap="coolwarm")
         plt.colorbar()
 
         plt.quiver(theta, theta_dot, d_theta, d_theta_dot, angles="xy", width=1e-3)

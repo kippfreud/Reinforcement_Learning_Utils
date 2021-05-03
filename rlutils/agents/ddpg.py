@@ -31,7 +31,7 @@ class DdpgAgent(Agent):
             Q, Q_target = self._make_Q(net_code_Q)
             self.Q.append(Q); self.Q_target.append(Q_target)
         # Create replay memory.
-        self.memory = ReplayMemory(self.P["replay_capacity"], include_done=True) # TODO: element_with_done should be default for all algorithms.
+        self.memory = ReplayMemory(self.P["replay_capacity"])
         # Create noise process for exploration.
         if self.P["noise_params"][0] == "ou": self.noise = OUNoise(self.env.action_space, *self.P["noise_params"][1:])
         if self.P["noise_params"][0] == "un": self.noise = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
@@ -63,9 +63,9 @@ class DdpgAgent(Agent):
             states = torch.cat(batch.state)
             actions = torch.cat(batch.action)
             rewards = torch.cat(batch.reward)
-            # Identify nonterminal states (note that replay memory elements are initialised to None).
-            nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
-            nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
+            next_states = torch.cat(batch.next_state)
+            nonterminal_mask = ~torch.cat(batch.done)
+            nonterminal_next_states = next_states[nonterminal_mask]
             # Select a' using the target pi network.
             nonterminal_next_actions = self.pi_target(nonterminal_next_states)
             if self.P["td3"]:
@@ -100,10 +100,14 @@ class DdpgAgent(Agent):
                 target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
         return policy_loss, value_loss_sum
 
-    def per_timestep(self, state, action, reward, next_state, done, do_update=True):
+    def per_timestep(self, state, action, reward, next_state, done, suppress_update=False):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, torch.tensor([action], device=self.device, dtype=torch.float), torch.tensor([reward], device=self.device, dtype=torch.float), next_state, done)                
-        if do_update:
+        self.memory.add(state, 
+                        torch.tensor([action], device=self.device, dtype=torch.float), 
+                        torch.tensor([reward], device=self.device, dtype=torch.float), 
+                        next_state, 
+                        torch.tensor([done], device=self.device, dtype=torch.bool))                
+        if not suppress_update:
             losses = self.update_on_batch()
             if losses: self.ep_losses.append(losses)
         self.total_t += 1

@@ -44,7 +44,7 @@ class ReinforceAgent(Agent):
             if do_extra: extra["V"] = value[0].item()
         else: 
             self.ep_predictions.append(dist.log_prob(action))
-        return action, extra
+        return action.item(), extra
 
     def update_on_episode(self):
         """Use the latest episode of experience to update the policy (and value) network parameters."""

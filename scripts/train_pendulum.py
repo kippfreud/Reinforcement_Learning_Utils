@@ -6,7 +6,7 @@ from rlutils.specific.Pendulum import reward_function
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "agent": "steve",
+    "agent": "sac",
     "num_episodes": 100,
     "episode_time_limit": 200,
     "from_pixels": False,
@@ -14,7 +14,7 @@ train_parameters = {
     "render_freq": 0,
     "video_save_freq": 0,
     "observe_freq": 0,
-    "save_final_agent": True,
+    "save_final_agent": False,
 }
 
 # Make environment.
@@ -40,9 +40,9 @@ agent_parameters["td3"] = {**agent_parameters["ddpg"], **{
     "td3_policy_freq": 2
 }}    
 agent_parameters["sac"] = {
-    "replay_capacity": 10000,
-    "batch_size": 64,
-    "lr_pi": 5e-4,
+    "replay_capacity": 5000,
+    "batch_size": 32,
+    "lr_pi": 1e-4,
     "lr_Q": 1e-3,
     "gamma": 0.99,
     "alpha": 0.2,

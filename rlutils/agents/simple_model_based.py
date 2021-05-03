@@ -27,9 +27,9 @@ class SimpleModelBasedAgent(Agent):
             net_code = [(self.state_dim+action_dim, 32), "R", (32, 64), "R", (64, self.state_dim)]
         self.model = SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for random transitions one for on-policy transitions.
-        self.random_memory = ReplayMemory(self.P["random_replay_capacity"]) 
+        self.random_memory = ReplayMemory(self.P["random_replay_capacity"])
         if not self.P["random_mode_only"]:
-            self.memory = ReplayMemory(self.P["replay_capacity"]) 
+            self.memory = ReplayMemory(self.P["replay_capacity"])
             self.batch_split = (round(self.P["batch_size"] * self.P["batch_ratio"]), round(self.P["batch_size"] * (1-self.P["batch_ratio"])))
         # Tracking variables.
         self.random_mode = True
@@ -75,17 +75,16 @@ class SimpleModelBasedAgent(Agent):
     def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
         state = state.to(self.device)
-        # action = torch.tensor([action]).float().to(self.device)
         reward = torch.tensor([reward]).float().to(self.device)
         if not self.P["random_mode_only"] and self.random_mode and len(self.random_memory) >= self.P["random_replay_capacity"]: 
             self.random_mode = False
             print("Random data collection complete.")
         if not self.continuous_actions: action = [action]
-        if self.random_mode: self.random_memory.add(state, action, reward, next_state)
+        if self.random_mode: self.random_memory.add(state, action, reward, next_state, done)
         else: self.memory.add(state, action, reward, next_state)
         if self.total_t % self.P["model_freq"] == 0:
             loss = self.update_on_batch()
-            if loss: self.ep_losses.append(loss); print(len(self.random_memory), loss)
+            if loss: self.ep_losses.append(loss)
         self.total_t += 1
 
     def per_episode(self):

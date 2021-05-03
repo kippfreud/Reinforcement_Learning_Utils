@@ -4,11 +4,11 @@ import rlutils
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "agent": "simple_model_based",
+    "agent": "dqn",
     "num_episodes": 2000,
     "episode_time_limit": 500,
     "from_pixels": False,
-    "wandb_monitor": False,
+    "wandb_monitor": True,
     "render_freq": 0,
     "video_save_freq": 0,
     "observe_freq": 0,
@@ -29,12 +29,12 @@ else: state_shape, renderer = env.observation_space.shape, None
 
 if train_parameters["agent"] == "dqn":
     agent_parameters = {
-        "replay_capacity": 50000,
-        "batch_size": 32,
+        "replay_capacity": 10000,
+        "batch_size": 128,
         "lr_Q": 1e-3,
         "epsilon_start": 1,
         "epsilon_end": 0.05,
-        "epsilon_decay": 100000,
+        "epsilon_decay": 10000,
         "updates_between_target_clone": 2000
     }
 elif train_parameters["agent"] == "reinforce":
@@ -57,4 +57,4 @@ elif train_parameters["agent"] == "simple_model_based":
 
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-# rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))
+rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))

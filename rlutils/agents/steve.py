@@ -2,6 +2,7 @@
 Stochastic ensemble value expansion (STEVE). From:
     "Sample-Efficient Reinforcement Learning with Stochastic Ensemble Value Expansion"
 NOTE: Currently requires reward function to be provided rather than learned.
+NOTE: The model is also set up to predict state *derivatives*, unlike in the original paper. 
 """
 
 from .ddpg import DdpgAgent, _sa_concat # STEVE inherits from DDPG.
@@ -49,9 +50,12 @@ class SteveAgent(DdpgAgent):
         if do_extra: extra["next_state_pred"] = self.predict(state, action).numpy()
         return action, extra
 
-    def predict(self, state, action):
-        """Use model to predict the next state given a single state-action pair."""
-        return state[0] + self.model(torch.cat((state[0], torch.Tensor(action if self.continuous_actions else [action]).to(self.device))).to(self.device)).detach()
+    def predict(self, state, action, mode="mean"):
+        """Use both models (mean) to predict the next state given a single state-action pair."""
+        sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
+        ds = torch.cat([model(sa).detach() for model in self.models])
+        if mode == "mean": return state[0] + ds.mean(axis=0)
+        elif mode == "all": return state[0] + ds
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model, pi and Q network parameters."""
@@ -75,13 +79,13 @@ class SteveAgent(DdpgAgent):
                 model.optimise(loss)
                 self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusion of DDPG methods.
         
-        # TODO: Handle termination.
+        # TODO: Handle termination via nonterminal_mask.
         
         # Sample another batch, this time for training pi and Q.
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
-        reward = torch.cat(batch.reward).reshape(-1,1)
+        rewards = torch.cat(batch.reward).reshape(-1,1)
         next_states = torch.cat(batch.next_state)
         # Use models to build (hopefully) better Q_targets by simulating forward dynamics.
         Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.Q_target)))
@@ -90,7 +94,7 @@ class SteveAgent(DdpgAgent):
             for j, target_net in enumerate(self.Q_target):
                 next_actions = self.pi_target(next_states) # Select a' using the target pi network.
                 # Same target for all models at this point.
-                Q_targets[:,0,:,j] = (reward + self.P["gamma"] * target_net(_sa_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
+                Q_targets[:,0,:,j] = (rewards + self.P["gamma"] * target_net(_sa_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
             for i, model in enumerate(self.models):  
                 # Run a forward simulation for each model. 
                 sim_states, sim_actions, g = next_states, next_actions, 0      
@@ -118,7 +122,7 @@ class SteveAgent(DdpgAgent):
         if self.random_mode and self.total_t >= self.P["num_random_steps"]: 
             self.random_mode = False
             print("Random data collection complete.")
-        DdpgAgent.per_timestep(self, state, action, reward, next_state, done, do_update=not(self.random_mode))
+        DdpgAgent.per_timestep(self, state, action, reward, next_state, done, suppress_update=self.random_mode)
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""

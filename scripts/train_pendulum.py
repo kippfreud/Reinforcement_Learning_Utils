@@ -46,7 +46,7 @@ agent_parameters["sac"] = {
     "lr_Q": 1e-3,
     "gamma": 0.99,
     "alpha": 0.2,
-    "tau": 0.005,
+    "tau": 0.01,
 }
 agent_parameters["simple_model_based"] = {
     "random_mode_only": True,

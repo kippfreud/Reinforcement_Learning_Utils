@@ -63,9 +63,8 @@ class DdpgAgent(Agent):
             states = torch.cat(batch.state)
             actions = torch.cat(batch.action)
             rewards = torch.cat(batch.reward)
-            next_states = torch.cat(batch.next_state)
             nonterminal_mask = ~torch.cat(batch.done)
-            nonterminal_next_states = next_states[nonterminal_mask]
+            nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
             # Select a' using the target pi network.
             nonterminal_next_actions = self.pi_target(nonterminal_next_states)
             if self.P["td3"]:
@@ -73,14 +72,11 @@ class DdpgAgent(Agent):
                 noise = (torch.randn_like(nonterminal_next_actions) * self.P["td3_noise_std"]
                         ).clamp(-self.P["td3_noise_clip"], self.P["td3_noise_clip"])
                 nonterminal_next_actions = (nonterminal_next_actions + noise).clamp(-1, 1)
-
-            next_Q_values = torch.zeros((self.P["batch_size"], len(self.Q_target)), device=self.device)
-            for i, Q_target in enumerate(self.Q_target):
-                # Use target Q networks to compute Q_target(s', a') for each nonterminal next state.    
-                next_Q_values[nonterminal_mask,i] = Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze()
+            # Use target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. This is the "clipped double Q trick".
+            next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
+            next_Q_values[nonterminal_mask] = torch.min(*(Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
             # Compute target = reward + discounted Q_target(s', a').
-            # For TD3 we use two target Q networks and take the minimum value. This is the "clipped double Q trick".
-            Q_targets = rewards + (self.P["gamma"] * next_Q_values.min(dim=1)[0])
+            Q_targets = (rewards + (self.P["gamma"] * next_Q_values)).detach()
         value_loss_sum = 0.
         for Q in self.Q:    
             # Update value in the direction of TD error. 

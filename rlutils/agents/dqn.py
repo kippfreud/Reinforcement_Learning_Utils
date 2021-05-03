@@ -64,9 +64,8 @@ class DqnAgent(Agent):
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
-        next_states = torch.cat(batch.next_state)
         nonterminal_mask = ~torch.cat(batch.done)
-        nonterminal_next_states = next_states[nonterminal_mask]
+        nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
         # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
         #
         # ===================

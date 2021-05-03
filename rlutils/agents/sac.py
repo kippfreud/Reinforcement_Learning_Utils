@@ -21,8 +21,10 @@ class SacAgent(Agent):
             net_code_pi = [(self.env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, 2*self.env.action_space.shape[0])] # Mean and standard deviation.
             net_code_Q = [(self.env.observation_space.shape[0]+self.env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
         self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
-        self.Q, self.Q_target = self._make_Q(net_code_Q)
-        self.Q2, self.Q2_target = self._make_Q(net_code_Q)
+        self.Q, self.Q_target = [], []
+        for i in range(2): # We have two Q networks, each with their corresponding targets.
+            Q, Q_target = self._make_Q(net_code_Q)
+            self.Q.append(Q); self.Q_target.append(Q_target)
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.   
@@ -30,7 +32,6 @@ class SacAgent(Agent):
     
     def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection from Gaussian parameterised by output of self.pi."""
-        state = state.to(self.device)
         action, log_prob = self._pi_to_action_and_log_prob(self.pi(state))
         return action.cpu().detach().numpy()[0], {}
 
@@ -42,53 +43,37 @@ class SacAgent(Agent):
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
-        next_states = torch.cat(batch.next_state)
         nonterminal_mask = ~torch.cat(batch.done)
-        nonterminal_next_states = next_states[nonterminal_mask]
-        # # Identify nonterminal states (note that replay memory elements are initialised to None).
-        # nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
-        # nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
+        nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
         # Select a' using the current pi network.
         nonterminal_next_actions, nonterminal_next_log_probs = self._pi_to_action_and_log_prob(self.pi(nonterminal_next_states))
-        # Use both target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. 
-        # This is the "clipped double Q trick".
-        next_soft_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
-        next_soft_Q_values[nonterminal_mask] = torch.min(
-            self.Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze(),
-            self.Q2_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions.detach())).squeeze())       
-        # Subtract entropy term to create soft Q values.
-        next_soft_Q_values[nonterminal_mask] -= self.P["alpha"] * nonterminal_next_log_probs
+        # Use target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. This is the "clipped double Q trick".
+        next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
+        next_Q_values[nonterminal_mask] = torch.min(*(Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
+        # Subtract entropy term, creating soft Q values.
+        next_Q_values[nonterminal_mask] -= self.P["alpha"] * nonterminal_next_log_probs
         # Compute target = reward + discounted soft Q_target(s', a').
-        Q_targets = (rewards + (self.P["gamma"] * next_soft_Q_values)).detach()
-        # Update value in the direction of entropy-regularised TD error. 
-        Q_values = self.Q(_sa_concat(states, actions)).squeeze()
-        value_loss = F.smooth_l1_loss(Q_values, Q_targets)
-        self.Q.optimise(value_loss, retain_graph=True)
-        Q2_values = self.Q2(_sa_concat(states, actions)).squeeze()
-        value2_loss = F.smooth_l1_loss(Q2_values, Q_targets)
-        self.Q2.optimise(value2_loss)
-        # Re-evaluate actions using the current pi network and get their values using the current Q networks.
+        Q_targets = (rewards + (self.P["gamma"] * next_Q_values)).detach()
+        value_loss_sum = 0.
+        for Q in self.Q:    
+            # Update value in the direction of entropy-regularised TD error. 
+            value_loss = F.smooth_l1_loss(Q(_sa_concat(states, actions)).squeeze(), Q_targets)
+            Q.optimise(value_loss)
+            value_loss_sum += value_loss.item()
+        # Re-evaluate actions using the current pi network and get their values using the current Q networks. Again use the clipped double Q trick. 
         actions_new, log_probs_new = self._pi_to_action_and_log_prob(self.pi(states))
-        Q_values_new = torch.min( 
-            self.Q(_sa_concat(states, actions_new.detach())).squeeze(),
-            self.Q2(_sa_concat(states, actions_new.detach())).squeeze()) # Again use the clipped double Q trick.  
+        Q_values_new = torch.min(*(Q(_sa_concat(states, actions_new)) for Q in self.Q))
         # Update policy in the direction of increasing value according to self.Q (the policy gradient), plus entropy regularisation.
         policy_loss = ((self.P["alpha"] * log_probs_new) - Q_values_new).mean()
         self.pi.optimise(policy_loss)
         # Perform soft updates on targets.
-        for target_param, param in zip(self.Q_target.parameters(), self.Q.parameters()):
-            target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
-        for target_param, param in zip(self.Q2_target.parameters(), self.Q2.parameters()):
-            target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
-        return policy_loss.item(), value_loss.item() + value2_loss.item()
+        for net, target in zip(self.Q, self.Q_target):
+            for param, target_param in zip(net.parameters(), target.parameters()):
+                target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
+        return policy_loss.item(), value_loss_sum
 
     def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
-        # if done: next_state = None # TODO: Improve implementation.
-        # state = state.to(self.device)
-        # action = torch.tensor([action]).float().to(self.device)
-        # reward = torch.tensor([reward]).float().to(self.device)
-        # self.memory.add(state, action, reward, next_state)
         self.memory.add(state, 
                         torch.tensor([action], device=self.device, dtype=torch.float), 
                         torch.tensor([reward], device=self.device, dtype=torch.float), 
@@ -118,7 +103,7 @@ class SacAgent(Agent):
         mu, log_std = torch.split(pi, self.env.action_space.shape[0], dim=1)
         log_std = torch.clamp(log_std, -20, 2)
         gaussian = Normal(mu, torch.exp(log_std))
-        action_unsquashed = gaussian.sample()
+        action_unsquashed = gaussian.rsample() # rsample() required to allow differentiation.
         action = torch.tanh(action_unsquashed)
         # Compute log_prob from Gaussian, then apply correction for Tanh squashing.
         log_prob = gaussian.log_prob(action_unsquashed).sum(axis=-1)

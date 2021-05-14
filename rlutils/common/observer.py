@@ -65,11 +65,6 @@ class Observer:
             self.dim_names += extra_dim_names
             self.first = False
 
-    def dataframe(self):
-        df = pd.DataFrame(self.data, columns=self.dim_names)
-        df.index.name = "step"
-        return df
-
     def add_future(self, dims, gamma, mode="sum", new_dims=None):
         """
         Add dimensions to the dataset corresponding to the discounted sum of existing ones.
@@ -111,4 +106,10 @@ class Observer:
         assert data_new_dims.shape[1] == len(new_dims)
         self.data = np.hstack((self.data, data_new_dims))
         self.dim_names += new_dims
-    
+
+    def dataframe(self):
+        df = pd.DataFrame(self.data, columns=self.dim_names)
+        df.index.name = "step"
+        return df
+
+    def save(self, path): self.dataframe().to_csv(path)

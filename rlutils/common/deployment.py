@@ -16,7 +16,10 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
     do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
     do_wandb = "wandb_monitor" in P and P["wandb_monitor"]
     do_render = "render_freq" in P and P["render_freq"] > 0
-    do_observe = observer and "observe_freq" in P and P["observe_freq"] > 0
+    if "observe_freq" in P and P["observe_freq"] > 0:
+        if observer: do_observe = True
+        else: raise Exception("No observer provided!") 
+    else: do_observe = False
     do_save = "save_final_agent" in P and P["save_final_agent"]
 
     # Initialise weights and biases monitoring.
@@ -93,11 +96,9 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         if renderer: renderer.close()
         agent.env.close()
 
-    # Save observer data if applicable.
-    if do_observe: observer.dataframe().to_csv(f"{save_dir}/{run_name}.csv")
-
     # Save final agent if applicable.
     if do_save:
+        agent.env = None
         if type(agent)==StableBaselinesAgent: agent.save(f"{save_dir}/{run_name}") 
         else: torch.save(agent, f"{save_dir}/{run_name}.agent")
 

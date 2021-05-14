@@ -16,7 +16,7 @@ default_hyperparameters = {
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
-    "tau": 0.005,
+    "tau": 0.005, # Parameter for Polyak averaging of target network parameters.
     "noise_params": ("ou", 0., 0.15, 0.3, 0.3, 1000),
     "td3": False, # Whether or not to enable the TD3 enhancements. 
     # --- If TD3 enabled ---
@@ -61,8 +61,8 @@ default_hyperparameters = {
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
-    "alpha": 0.2,
-    "tau": 0.01
+    "alpha": 0.2, # Weighting for entropy regularisation term.
+    "tau": 0.005 # Parameter for Polyak averaging of target network parameters.
   },
 
   "simple_model_based": {  

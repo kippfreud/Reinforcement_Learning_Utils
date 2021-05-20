@@ -95,9 +95,12 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
 
             # Save current agent model if applicable.
             if checkpoint_this_ep:
+                env = agent.env
+                agent.env = None # Needed to stop pickle from throwing an error.
                 fname = f"{save_dir}/{run_name}_ep{ep+1}"
                 if type(agent)==StableBaselinesAgent: agent.save(fname) 
                 else: torch.save(agent, f"{fname}.agent")
+                agent.env = env
 
         # Clean up.
         if renderer: renderer.close()

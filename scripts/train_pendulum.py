@@ -13,8 +13,8 @@ train_parameters = {
     "wandb_monitor": True,
     "render_freq": 0,
     "video_save_freq": 0,
-    "observe_freq": 0,
-    "save_final_agent": False,
+    "observe_freq": 1,
+    "checkpoint_freq": 100,
 }
 
 # Make environment.
@@ -60,4 +60,11 @@ agent_parameters["steve"] = {
 a = train_parameters["agent"]
 agent = rlutils.make(a, env, agent_parameters[a])
 print(agent)
-rlutils.train(agent, train_parameters, observer=rlutils.Observer(state_dims=3, action_dims=1))
+obs = rlutils.Observer(state_dims=["cos_theta","sin_theta","theta_dot"], action_dims=1)
+rn = rlutils.train(agent, train_parameters, observer=obs)
+
+if train_parameters["observe_freq"]:
+    import numpy as np
+    obs.add_custom_dims(lambda x: np.array([np.arccos(x[2]) * np.sign(x[3])]), ["theta"])
+    obs.add_future(["reward"], gamma=agent.P["gamma"], new_dims=["return"]) # Add return dim.
+    obs.save(f"runs/{rn}_train.csv")

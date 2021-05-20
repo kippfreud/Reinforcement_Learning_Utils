@@ -20,7 +20,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         if observer: do_observe = True
         else: raise Exception("No observer provided!") 
     else: do_observe = False
-    do_save = "save_final_agent" in P and P["save_final_agent"]
+    do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
 
     # Initialise weights and biases monitoring.
     if do_wandb: 
@@ -47,7 +47,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         agent.env = gym.wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
 
     # Create directory for saving.
-    if do_observe or do_save: import os; os.makedirs(save_dir, exist_ok=True)
+    if do_observe or do_checkpoints: import os; os.makedirs(save_dir, exist_ok=True)
 
     # Stable Baselines uses its own training and saving procedures.
     if train and type(agent)==StableBaselinesAgent: agent.train(P["sb_parameters"])
@@ -56,6 +56,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         for ep in tqdm(range(P["num_episodes"])):
             render_this_ep = do_render and ep % P["render_freq"] == 0
             observe_this_ep = do_observe and ep % P["observe_freq"] == 0
+            checkpoint_this_ep = do_checkpoints and (ep+1) % P["checkpoint_freq"] == 0
             state, reward_sum, t, done = agent.env.reset(), 0, 0, False
             
             # Get state representation.
@@ -92,14 +93,14 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
             # Log to weights and biases if applicable.
             if do_wandb: results["logs"]["reward_sum"] = reward_sum; wandb.log(results["logs"])
 
+            # Save current agent model if applicable.
+            if checkpoint_this_ep:
+                fname = f"{save_dir}/{run_name}_ep{ep+1}"
+                if type(agent)==StableBaselinesAgent: agent.save(fname) 
+                else: torch.save(agent, f"{fname}.agent")
+
         # Clean up.
         if renderer: renderer.close()
         agent.env.close()
-
-    # Save final agent if applicable.
-    if do_save:
-        agent.env = None
-        if type(agent)==StableBaselinesAgent: agent.save(f"{save_dir}/{run_name}") 
-        else: torch.save(agent, f"{save_dir}/{run_name}.agent")
 
     return run_name # Return run name for reference.

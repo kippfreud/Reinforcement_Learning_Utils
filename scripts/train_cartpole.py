@@ -4,15 +4,15 @@ import rlutils
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "agent": "dqn",
-    "num_episodes": 2000,
+    "agent": "actor_critic",
+    "num_episodes": 100,
     "episode_time_limit": 500,
     "from_pixels": False,
-    "wandb_monitor": True,
+    "wandb_monitor": False,
     "render_freq": 0,
     "video_save_freq": 0,
     "observe_freq": 0,
-    "save_final_agent": False,
+    "checkpoint_freq": 10,
 }
 
 # Make environment.
@@ -57,4 +57,9 @@ elif train_parameters["agent"] == "simple_model_based":
 
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
-rlutils.train(agent, train_parameters, renderer, observer=rlutils.Observer(state_dims=4, action_dims=1))
+obs = rlutils.Observer(state_dims=["pos","vel","ang","ang_vel"], action_dims=1)
+rn = rlutils.train(agent, train_parameters, renderer, observer=obs)
+
+if train_parameters["observe_freq"]:
+    obs.add_future(["reward"], gamma=agent.P["gamma"], new_dims=["return"]) # Add return dim.
+    obs.save(f"runs/{rn}_train.csv")

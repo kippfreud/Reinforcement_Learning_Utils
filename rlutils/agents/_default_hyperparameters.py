@@ -5,12 +5,16 @@ NOTE: Agent names must be lowercase.
 default_hyperparameters = {
   
   "actor_critic": {
+    "net_pi": [(None, 64), "R", (64, 128), "R", (128, None), "S"], # Softmax policy.
+    "net_V": [(None, 64), "R", (64, 128), "R", (128, None)],
     "lr_pi": 1e-4, # Learning rate for policy.
     "lr_V": 1e-3, # Learning rate for state value function.
     "gamma": 0.99 # Discount factor.
   },   
 
   "ddpg": {
+    "net_pi": [(None, 256), "R", (256, 256), "R", (256, None), "T"],
+    "net_Q": [(None, 256), "R", (256, 256), "R", (256, 1)],
     "replay_capacity": 50000, # Size of replay buffer (starts overwriting when full).
     "batch_size": 128, # Size of batches to sample from replay buffer during learning.
     "lr_pi": 1e-4, # Learning rate for policy.
@@ -26,6 +30,7 @@ default_hyperparameters = {
   },
 
   "dqn": {
+    "net_Q": [(None, 256), "R", (256, 128), "R", (128, 64), "R", (64, None)], # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
     "replay_capacity": 10000, # Size of replay buffer (starts overwriting when full).
     "batch_size": 128, # Size of batches to sample from replay buffer during learning.
     "lr_Q": 1e-3, # Learning rate for state-action value function.
@@ -33,7 +38,8 @@ default_hyperparameters = {
     "epsilon_start": 0.9,
     "epsilon_end": 0.05,
     "epsilon_decay": 500000,
-    "updates_between_target_clone": 2000,
+    "target_update": ("soft", 0.0005), # Either ("hard", freq) or ("soft", tau).
+    "double": True, # Whether to enable double DQN variant to reduce overestimation bias.
     "reward_components": 1 # For reward decomposition.
   },
 
@@ -49,13 +55,18 @@ default_hyperparameters = {
   },
 
   "reinforce": {
+    "net_pi": [(None, 64), "R", (64, 128), "R", (128, None), "S"], # Softmax policy.
     "lr_pi": 1e-4, # Learning rate for policy.
-    "lr_V": 1e-3, # Learning rate for state value function.
     "gamma": 0.99, # Discount factor.
-    "baseline": "adv" # Baselining method: either "off", "Z" or "adv".
+    "baseline": "adv", # Baselining method: either "off", "Z" or "adv".
+    # --- If baseline == "adv" ---
+    "net_V": [(None, 64), "R", (64, 128), "R", (128, None)],
+    "lr_V": 1e-3, # Learning rate for state value function.
   },
 
   "sac": {
+    "net_pi": [(None, 256), "R", (256, 256), "R", (256, None)],
+    "net_Q": [(None, 256), "R", (256, 256), "R", (256, None)],
     "replay_capacity": 10000, # Size of replay buffer (starts overwriting when full).
     "batch_size": 256, # Size of batches to sample from replay buffer during learning.
     "lr_pi": 1e-4, # Learning rate for policy.
@@ -66,7 +77,8 @@ default_hyperparameters = {
   },
 
   "simple_model_based": {  
-    "random_replay_capacity": 2000, # Size of random replay buffer (disables random mode when full).
+    "net_model": [(None, 32), "R", (32, 64), "R", (64, None)],
+    "num_random_steps": 2000, # Size of random replay buffer (disables random mode when full).
     "batch_size": 256,
     "model_freq": 10, # Number of steps between model updates.
     "lr_model": 1e-3, # Learning rate for dynamics model.
@@ -85,6 +97,7 @@ default_hyperparameters = {
   },
 
   "steve": {
+    "net_model": [(None, 32), "R", (32, 64), "R", (64, None)],
     "num_random_steps": 1000, # Number of steps before disabling random mode and starting learning.
     "num_models": 2, # Number of parallel dynamics models to train.
     "model_freq": 1, # Number of steps between model updates.

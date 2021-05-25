@@ -1,3 +1,12 @@
+"""
+Net codes:
+- "R"                 = ReLU
+- "T"                 = Tanh
+- "S"                 = Softmax
+- ("D", p)            = Dropout
+- ("B", num_features) = Batch norm
+"""
+
 import torch.nn as nn
 import torch.optim as optim
 
@@ -7,11 +16,10 @@ class SequentialNetwork(nn.Module):
                  eval_only=False, optimiser=optim.Adam, lr=1e-3, clip_grads=False):
         super(SequentialNetwork, self).__init__() 
         if layers is None: 
-            if code is not None:
-                layers = code_parser(code)
+            assert input_shape is not None and output_size is not None, "Must specify input_shape and output_size."
+            if code is not None: layers = code_parser(code, input_shape, output_size)
             else:
                 assert preset is not None, "Must specify layers, code or preset."
-                assert input_shape is not None and output_size is not None, "Must specify input_shape and output_size."
                 layers = sequential_presets(preset, input_shape, output_size)
         self.layers = nn.Sequential(*layers)
         if eval_only: self.eval()
@@ -44,14 +52,18 @@ class SequentialNetwork(nn.Module):
 #         return tuple(head(x) for head in self.heads)
 
 
-def code_parser(code):
+def code_parser(code, input_shape, output_size):
     layers = []
     for l in code:
-        if type(l[0]) == int:   layers.append(nn.Linear(l[0], l[1]))
+        if type(l) in {list, tuple}:   
+            i, o = l[0], l[1]
+            if i is None: i = input_shape # NOTE: Only works for vectors at the moment.
+            if o is None: o = output_size 
+            layers.append(nn.Linear(i, o))
         elif l == "R":          layers.append(nn.ReLU())
         elif l == "T":          layers.append(nn.Tanh())
         elif l == "S":          layers.append(nn.Softmax(dim=1))
-        elif l[0] == "D":       layers.append(nn.Dropout(p=0.6))
+        elif l[0] == "D":       layers.append(nn.Dropout(p=l[1]))
         elif l[0] == "B":       layers.append(nn.BatchNorm2d(l[1]))
     return layers
 

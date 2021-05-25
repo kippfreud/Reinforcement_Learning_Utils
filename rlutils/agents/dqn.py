@@ -13,27 +13,24 @@ import torch.nn.functional as F
 
 
 class DqnAgent(Agent):
-    def __init__(self, env, hyperparameters, net_code=None):
+    def __init__(self, env, hyperparameters):
         Agent.__init__(self, env, hyperparameters)
         # Create Q network.
-        if net_code is None:
-            if len(self.env.observation_space.shape) > 1: 
-                net_preset = "CartPoleQ_Pixels"
-                net_code, input_shape, output_size = None, self.env.observation_space.shape, self.env.action_space.n*self.P["reward_components"]
-            else: 
-                # From https://github.com/transedward/pytorch-dqn/blob/master/dqn_model.py.
-                net_code = [(self.env.observation_space.shape[0], 256), "R", (256, 128), "R", (128, 64), "R", (64, self.env.action_space.n*self.P["reward_components"])]
-                net_preset, input_shape, output_size = None, None, None
+        if len(self.env.observation_space.shape) > 1: 
+            net_preset = "CartPoleQ_Pixels"
+            net_code, input_shape, output_size = None, self.env.observation_space.shape, self.env.action_space.n*self.P["reward_components"]
+        else: net_code, net_preset, input_shape, output_size = self.P["net_Q"], None, self.env.observation_space.shape[0], self.env.action_space.n*self.P["reward_components"]
         self.Q = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
         self.Q_target = SequentialNetwork(code=net_code, preset=net_preset, input_shape=input_shape, output_size=output_size, eval_only=True).to(self.device)
         self.Q_target.load_state_dict(self.Q.state_dict()) # Clone.
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
-        # Tracking variables.
+        # Initialise epsilon-greedy for exploration.
         self.epsilon = self.P["epsilon_start"]
-        # self.total_t = 0 # Used for epsilon decay.
         self.epsilon_decay_per_timestep = (self.P["epsilon_start"] - self.P["epsilon_end"]) / self.P["epsilon_decay"]
-        self.updates_since_target_clone = 0
+        # Tracking variables.
+        if self.P["target_update"][0] == "hard": self.updates_since_target_clone = 0
+        else: assert self.P["target_update"][0] == "soft"
         self.ep_losses = []
 
     def act(self, state, explore=True, do_extra=False):
@@ -42,9 +39,7 @@ class DqnAgent(Agent):
         # If using decomposed rewards, need to take sum.
         #
         # ===================
-        #
         if self.P["reward_components"] > 1: Q = Q.sum(axis=1).reshape(-1,1)
-        #
         # ===================
         #
         # Assemble epsilon-greedy action distribution.
@@ -66,46 +61,43 @@ class DqnAgent(Agent):
         rewards = torch.cat(batch.reward)
         nonterminal_mask = ~torch.cat(batch.done)
         nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
-        # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
-        #
-        # ===================
-        #
-        if self.P["reward_components"] > 1: 
-            Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, -1)[torch.arange(self.P["batch_size"]), actions, :]
-        #
-        # ===================
-        #
-        else: Q_values = self.Q(states).gather(1, actions.reshape(-1,1)).squeeze()
         # Use target network to compute Q_target(s', a') for each nonterminal next state.
-        # a' is chosen to be the maximising action from s'.
         next_Q_values = torch.zeros((self.P["batch_size"], self.P["reward_components"]), device=self.device)
+        Q_t_n = self.Q_target(nonterminal_next_states)
         # 
         # ===================
-        #
-        Q_t_n = self.Q_target(nonterminal_next_states)
         if self.P["reward_components"] > 1: 
+            Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, -1)[torch.arange(self.P["batch_size"]), actions, :]
             Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.env.action_space.n, -1)
-            actions_next = Q_t_n.sum(axis=2).max(1)[1].detach()
-        else: 
-            actions_next = Q_t_n.max(1)[1].detach()
-            Q_t_n = Q_t_n.unsqueeze(-1)
-            rewards = rewards.unsqueeze(-1)
-            Q_values = Q_values.unsqueeze(-1)
-        #
+            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).sum(axis=2).max(1)[1].detach()
+            else: nonterminal_next_actions = Q_t_n.sum(axis=2).max(1)[1].detach()
         # ===================
         #
-        next_Q_values[nonterminal_mask] = Q_t_n[torch.arange(Q_t_n.shape[0]), actions_next, :]        
+        else: 
+            # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
+            Q_values = self.Q(states).gather(1, actions.reshape(-1,1))
+            # In double DQN, a' is the Q-maximising action for self.Q. This decorrelation reduces overestimation bias.
+            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).max(1)[1].detach()
+            # In regular DQN, a' is the Q-maximising action for self.Q_target.
+            else: nonterminal_next_actions = Q_t_n.max(1)[1].detach()
+            Q_t_n = Q_t_n.unsqueeze(-1)
+            rewards = rewards.unsqueeze(-1)
+        next_Q_values[nonterminal_mask] = Q_t_n[torch.arange(Q_t_n.shape[0]), nonterminal_next_actions, :]        
         # Compute target = reward + discounted Q_target(s', a').
         Q_targets = rewards + (self.P["gamma"] * next_Q_values)
         # Update value in the direction of TD error using Huber loss. 
-        # See https://en.wikipedia.org/wiki/Huber_loss.
         loss = F.smooth_l1_loss(Q_values, Q_targets)
         self.Q.optimise(loss)
-        # Periodically clone target.
-        self.updates_since_target_clone += 1
-        if self.updates_since_target_clone >= self.P["updates_between_target_clone"]:
-            self.Q_target.load_state_dict(self.Q.state_dict())
-            self.updates_since_target_clone = 0
+        if self.P["target_update"][0] == "hard":
+            # Perform periodic hard update on target.
+            self.updates_since_target_clone += 1
+            if self.updates_since_target_clone >= self.P["target_update"][1]:
+                self.Q_target.load_state_dict(self.Q.state_dict())
+                self.updates_since_target_clone = 0
+        else: 
+            # Perform soft (Polyak) update on target.
+            for param, target_param in zip(self.Q.parameters(), self.Q_target.parameters()):
+                target_param.data.copy_(param.data * self.P["target_update"][1] + target_param.data * (1.0 - self.P["target_update"][1]))
         return loss.item()
 
     def per_timestep(self, state, action, reward, next_state, done):

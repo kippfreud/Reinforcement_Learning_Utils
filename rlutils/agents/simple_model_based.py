@@ -21,13 +21,10 @@ class SimpleModelBasedAgent(Agent):
         self.continuous_actions = len(self.env.action_space.shape) > 0
         # Create model network.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
-        else:
-            self.state_dim = self.env.observation_space.shape[0]
-            action_dim = self.env.action_space.shape[0] if self.continuous_actions else 1 
-            net_code = [(self.state_dim+action_dim, 32), "R", (32, 64), "R", (64, self.state_dim)]
-        self.model = SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device)
+        else: self.state_dim, action_dim = self.env.observation_space.shape[0], (self.env.action_space.shape[0] if self.continuous_actions else 1) 
+        self.model = SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim, lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for random transitions one for on-policy transitions.
-        self.random_memory = ReplayMemory(self.P["random_replay_capacity"])
+        self.random_memory = ReplayMemory(self.P["num_random_steps"])
         if not self.P["random_mode_only"]:
             self.memory = ReplayMemory(self.P["replay_capacity"])
             self.batch_split = (round(self.P["batch_size"] * self.P["batch_ratio"]), round(self.P["batch_size"] * (1-self.P["batch_ratio"])))
@@ -45,12 +42,12 @@ class SimpleModelBasedAgent(Agent):
             best_rollout = np.argmax(returns)
             action = first_actions[best_rollout]
             if do_extra: extra["g_pred"] = returns[best_rollout]
-        if do_extra: extra["next_state_pred"] = self.predict(state, action).numpy()
+        if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].numpy()
         return action, extra
 
     def predict(self, state, action):
         """Use model to predict the next state given a single state-action pair."""
-        return state[0] + self.model(torch.cat((state[0], torch.Tensor(action if self.continuous_actions else [action]).to(self.device))).to(self.device)).detach()
+        return state + self.model(torch.cat((state[0], torch.Tensor(action if self.continuous_actions else [action]).to(self.device))).to(self.device)).detach()
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model network parameters."""
@@ -76,12 +73,12 @@ class SimpleModelBasedAgent(Agent):
         """Operations to perform on each timestep during training."""
         state = state.to(self.device)
         reward = torch.tensor([reward]).float().to(self.device)
-        if not self.P["random_mode_only"] and self.random_mode and len(self.random_memory) >= self.P["random_replay_capacity"]: 
+        if not self.P["random_mode_only"] and self.random_mode and len(self.random_memory) >= self.P["num_random_steps"]: 
             self.random_mode = False
             print("Random data collection complete.")
         if not self.continuous_actions: action = [action]
         if self.random_mode: self.random_memory.add(state, action, reward, next_state, done)
-        else: self.memory.add(state, action, reward, next_state)
+        else: self.memory.add(state, action, reward, next_state, done)
         if self.total_t % self.P["model_freq"] == 0:
             loss = self.update_on_batch()
             if loss: self.ep_losses.append(loss)
@@ -99,11 +96,11 @@ class SimpleModelBasedAgent(Agent):
         Then select the first action from the rollout with maximum return."""
         returns = []; first_actions = []
         for _ in range(self.P["num_rollouts"]):
-            rollout_state, rollout_return = state[0].detach().clone().to(self.device), 0
+            rollout_state, rollout_return = state.detach().clone().to(self.device), 0
             for t in range(self.P["rollout_horizon"]):
                 rollout_action = self.env.action_space.sample() # Random action selection.
-                if t == 0: first_actions.append(rollout_action)               
+                if t == 0: first_actions.append(rollout_action)       
                 rollout_state = self.predict(rollout_state, rollout_action)
-                rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state, rollout_action)                
+                rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state[0], rollout_action)                
             returns.append(rollout_return)
         return returns, first_actions    

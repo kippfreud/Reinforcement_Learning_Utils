@@ -5,14 +5,14 @@ train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
     "agent": "actor_critic",
-    "num_episodes": 100,
+    "num_episodes": 1500,
     "episode_time_limit": 500,
     "from_pixels": False,
-    "wandb_monitor": False,
+    "wandb_monitor": True,
     "render_freq": 0,
     "video_save_freq": 0,
     "observe_freq": 0,
-    "checkpoint_freq": 10,
+    "checkpoint_freq": 0,
 }
 
 # Make environment.
@@ -29,13 +29,15 @@ else: state_shape, renderer = env.observation_space.shape, None
 
 if train_parameters["agent"] == "dqn":
     agent_parameters = {
+        "net_Q": [(None, 32), "R", (32, 32), "R", (32, None)],
         "replay_capacity": 10000,
-        "batch_size": 128,
+        "batch_size": 32,
         "lr_Q": 1e-3,
         "epsilon_start": 1,
         "epsilon_end": 0.05,
         "epsilon_decay": 10000,
-        "updates_between_target_clone": 2000
+        "target_update": ("soft", 0.0005),
+        "double": True
     }
 elif train_parameters["agent"] == "reinforce":
     agent_parameters = {

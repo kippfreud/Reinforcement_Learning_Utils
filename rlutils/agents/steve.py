@@ -28,10 +28,8 @@ class SteveAgent(DdpgAgent):
             if k != "ddpg_parameters": self.P[k] = v
         # Create an ensemble of model networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
-        else:
-            self.state_dim = self.env.observation_space.shape[0]
-            net_code = [(self.state_dim+self.env.action_space.shape[0], 32), "R", (32, 64), "R", (64, self.state_dim)]
-        self.models = [SequentialNetwork(code=net_code, lr=self.P["lr_model"]).to(self.device) for _ in range(self.P["num_models"])]
+        else: self.state_dim, action_dim = self.env.observation_space.shape[0], self.env.action_space.shape[0]        
+        self.models = [SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim, lr=self.P["lr_model"]).to(self.device) for _ in range(self.P["num_models"])]
         # Parameters for action scaling.
         self.act_k = (self.env.action_space.high - self.env.action_space.low) / 2.
         self.act_b = (self.env.action_space.high + self.env.action_space.low) / 2.

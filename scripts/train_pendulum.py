@@ -6,7 +6,7 @@ from rlutils.specific.Pendulum import reward_function
 train_parameters = {
     "project_name": "pendulum",
     "env": "Pendulum-v0",
-    "agent": "sac",
+    "agent": "steve",
     "num_episodes": 100,
     "episode_time_limit": 200,
     "from_pixels": False,
@@ -49,7 +49,7 @@ agent_parameters["sac"] = {
     "tau": 0.01,
 }
 agent_parameters["simple_model_based"] = {
-    "random_mode_only": True,
+    "random_mode_only": False,
     "reward_function": reward_function,
 }
 agent_parameters["steve"] = {

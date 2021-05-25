@@ -17,13 +17,14 @@ class SacAgent(Agent):
         Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
-        else: 
-            net_code_pi = [(self.env.observation_space.shape[0], 256), "R", (256, 256), "R", (256, 2*self.env.action_space.shape[0])] # Mean and standard deviation.
-            net_code_Q = [(self.env.observation_space.shape[0]+self.env.action_space.shape[0], 256), "R", (256, 256), "R", (256, 1)]
-        self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
+        # Policy outputs mean and standard deviation.
+        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=self.env.observation_space.shape[0], output_size=2*self.env.action_space.shape[0], lr=self.P["lr_pi"]).to(self.device)
         self.Q, self.Q_target = [], []
-        for i in range(2): # We have two Q networks, each with their corresponding targets.
-            Q, Q_target = self._make_Q(net_code_Q)
+        for _ in range(2): # We have two Q networks, each with their corresponding targets.
+            # Action is an *input* to the Q network here.
+            Q = SequentialNetwork(code=self.P["net_Q"], input_shape=self.env.observation_space.shape[0]+self.env.action_space.shape[0], output_size=1, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
+            Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=self.env.observation_space.shape[0]+self.env.action_space.shape[0], output_size=1, eval_only=True).to(self.device)
+            Q_target.load_state_dict(Q.state_dict()) # Clone.
             self.Q.append(Q); self.Q_target.append(Q_target)
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
@@ -56,7 +57,7 @@ class SacAgent(Agent):
         Q_targets = (rewards + (self.P["gamma"] * next_Q_values)).detach()
         value_loss_sum = 0.
         for Q in self.Q:    
-            # Update value in the direction of entropy-regularised TD error. 
+            # Update value in the direction of entropy-regularised TD error using Huber loss. 
             value_loss = F.smooth_l1_loss(Q(_sa_concat(states, actions)).squeeze(), Q_targets)
             Q.optimise(value_loss)
             value_loss_sum += value_loss.item()
@@ -66,7 +67,7 @@ class SacAgent(Agent):
         # Update policy in the direction of increasing value according to self.Q (the policy gradient), plus entropy regularisation.
         policy_loss = ((self.P["alpha"] * log_probs_new) - Q_values_new).mean()
         self.pi.optimise(policy_loss)
-        # Perform soft updates on targets.
+        # Perform soft (Polyak) updates on targets.
         for net, target in zip(self.Q, self.Q_target):
             for param, target_param in zip(net.parameters(), target.parameters()):
                 target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
@@ -88,14 +89,6 @@ class SacAgent(Agent):
         else: mean_policy_loss, mean_value_loss = 0., 0.
         del self.ep_losses[:]
         return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss}}
-
-    def _make_Q(self, net_code_Q):
-        """Create Q network and target."""
-        # Action is an *input* to the Q network here.
-        Q = SequentialNetwork(code=net_code_Q, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
-        Q_target = SequentialNetwork(code=net_code_Q, eval_only=True).to(self.device)
-        Q_target.load_state_dict(Q.state_dict()) # Clone.
-        return Q, Q_target
 
     def _pi_to_action_and_log_prob(self, pi): 
         """SAC uses the output of self.pi as the mean and log standard deviation of a squashed Gaussian,

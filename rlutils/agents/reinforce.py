@@ -16,14 +16,9 @@ class ReinforceAgent(Agent):
         Agent.__init__(self, env, hyperparameters)
         # Create pi network (and V if using advantage baselining).
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
-            # preset_pi, preset_V = "CartPolePi_Pixels", "CartPoleV_Pixels"
-        else: 
-            net_code = [(self.env.observation_space.shape[0], 64), "R", (64, 128), "R"]
-            net_code_pi = net_code + [(128, self.env.action_space.n), "S"]
-            net_code_V = net_code + [(128, 1)] 
-        self.pi = SequentialNetwork(code=net_code_pi, lr=self.P["lr_pi"]).to(self.device)
+        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=self.env.observation_space.shape[0], output_size=self.env.action_space.n, lr=self.P["lr_pi"]).to(self.device)
         if self.P["baseline"] == "adv":
-            self.V = SequentialNetwork(code=net_code_V, lr=self.P["lr_V"]).to(self.device)
+            self.V = SequentialNetwork(code=self.P["net_V"], input_shape=self.env.observation_space.shape[0], output_size=1, lr=self.P["lr_V"]).to(self.device)
         else: self.V = None
         # Small float used to prevent div/0 errors.
         self.eps = np.finfo(np.float32).eps.item() 
@@ -56,9 +51,9 @@ class ReinforceAgent(Agent):
             returns.insert(0, g)
         returns = torch.tensor(returns, device=self.device)
         if self.V is not None: 
-            # Update value in the direction of advantage using MSE loss.
+            # Update value in the direction of advantage using Huber loss.
             log_probs, values = (torch.cat(x) for x in zip(*self.ep_predictions))
-            value_loss = F.mse_loss(values, returns)
+            value_loss = F.smooth_l1_loss(values, returns)
             self.V.optimise(value_loss)
         else: log_probs, values, value_loss = torch.cat(self.ep_predictions), None, 0
         # Update policy in the direction of log_prob(a) * delta.

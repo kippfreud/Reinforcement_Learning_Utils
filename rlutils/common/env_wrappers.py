@@ -21,25 +21,32 @@ class NormaliseActionWrapper(gym.ActionWrapper):
 class CustomRewardWrapper(gym.Wrapper): 
     """
     Enables implementation of a custom reward function.
-    NOTE: uses next_state not current one!
+
+    Reward function should output:
+        - Scalar reward.
+        - Boolean done flag.
+        - Info dictionary. NOTE: Use "reward_components" key to enable wandb monitoring.
     """
-    def __init__(self, env, R):
+    def __init__(self, env, R=None):
         self.env = env
         super().__init__(self.env)
-        self.R = R # This is the reward function.
+        if R is not None: self.R = R # This is the reward function.
+
+    def R(_, __, ___, reward, done, ____): return reward, done, {} # Default if None.
+
+    def reset(self): self.state = self.env.reset().copy(); return self.state
         
     def step(self, action):
-        next_state, _, done, info = self.env.step(action)
-        reward, done, info_add = self.R(next_state, action, done, info)
-        return next_state, reward, done, {**info, **info_add}
+        next_state, reward, done, info = self.env.step(action)
+        reward, done, info_add = self.R(self.state, next_state, action, reward, done, info)
+        self.state = next_state.copy()
+        return self.state, reward, done, {**info, **info_add}
 
 
 class MetaFeatureWrapper(gym.Wrapper):
     """
-    Constructs a dictionary of additional observation features, 
-    that are *not* given to the agent, but are instead appended to info. 
-    Has access to all historical (state, action, reward, info)
-    tuples from the current episode .
+    Constructs a dictionary of additional observation features, that are *not* given to the agent, but are instead appended to info. 
+    Has access to all historical (state, action, reward, info) tuples from the current episode.
     """
     def __init__(self, env, f):
         self.env = env

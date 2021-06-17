@@ -11,7 +11,7 @@ P_DEFAULT = {"num_episodes": 100, "render_freq": 1}
 def train(agent, P=P_DEFAULT, renderer=None, observer=None):
     return deploy(agent, P, True, renderer, observer)
 
-def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_dir="runs"):
+def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id=None, save_dir="runs"):
 
     do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
     do_wandb = "wandb_monitor" in P and P["wandb_monitor"]
@@ -26,7 +26,9 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
     if do_wandb: 
         assert not type(agent)==StableBaselinesAgent, "wandb monitoring not implemented for StableBaselinesAgent."
         import wandb
-        run = wandb.init(project=P["project_name"], monitor_gym=True, config={**agent.P, **P})
+        if run_id is None: run_id, resume = wandb.util.generate_id(), "never"
+        else: resume = "must"
+        run = wandb.init(project=P["project_name"], id=run_id, resume=resume, monitor_gym=True, config={**agent.P, **P})
         run_name = run.name
         # if train: # TODO: Weight monitoring causes an error with STEVE.
             # try: 
@@ -38,7 +40,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
             # try: wandb.watch(agent.pi)
             # except: pass
     else:
-        import time; run_name = time.strftime("%Y-%m-%d_%H-%M-%S")
+        import time; run_id, run_name = None, time.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Add wrappers to environment.
     if "episode_time_limit" in P and P["episode_time_limit"]: # Time limit.
@@ -84,14 +86,26 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
                 if train: agent.per_timestep(state, action, reward, next_state, done)
 
                 # Update tracking variables.
-                reward_sum += np.float64(reward).sum(); state = next_state; t += 1
+                reward_sum += np.float64(reward).sum()
+                if t == 0: 
+                    if ep == 0: do_reward_components = "reward_components" in info
+                    if do_reward_components: reward_components = {}
+                if do_reward_components:
+                    for c, r in info["reward_components"].items(): 
+                        c = f"reward_{c}"
+                        if c not in reward_components: reward_components[c] = 0.
+                        reward_components[c] += r
+                state = next_state; t += 1
 
             # Perform some agent-specific operations on each episode if training.
             if train: results = agent.per_episode()    
             else: results = {"logs": {}}  
 
             # Log to weights and biases if applicable.
-            if do_wandb: results["logs"]["reward_sum"] = reward_sum; wandb.log(results["logs"])
+            if do_wandb: 
+                results["logs"]["reward_sum"] = reward_sum
+                for c, r in reward_components.items(): results["logs"][c] = r
+                wandb.log(results["logs"])
 
             # Save current agent model if applicable.
             if checkpoint_this_ep:
@@ -106,4 +120,4 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, save_d
         if renderer: renderer.close()
         agent.env.close()
 
-    return run_name # Return run name for reference.
+    return run_id, run_name # Return run ID and name for reference.

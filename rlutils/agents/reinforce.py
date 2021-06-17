@@ -55,7 +55,7 @@ class ReinforceAgent(Agent):
             log_probs, values = (torch.cat(x) for x in zip(*self.ep_predictions))
             value_loss = F.smooth_l1_loss(values, returns)
             self.V.optimise(value_loss)
-        else: log_probs, values, value_loss = torch.cat(self.ep_predictions), None, 0
+        else: log_probs, values, value_loss = torch.cat(self.ep_predictions), None, torch.tensor(0.)
         # Update policy in the direction of log_prob(a) * delta.
         policy_loss = (-log_probs * self.baseline(returns, values)).sum()
         self.pi.optimise(policy_loss)

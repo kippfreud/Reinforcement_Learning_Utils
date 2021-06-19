@@ -17,7 +17,7 @@ class SimpleModelBasedAgent(Agent):
     def __init__(self, env, hyperparameters):
         assert "reward_function" in hyperparameters, "Need to provide reward function."
         Agent.__init__(self, env, hyperparameters)
-        # Establish whether action space is discrete or continuous.
+        # Establish whether action space is continuous or discrete.
         self.continuous_actions = len(self.env.action_space.shape) > 0
         # Create model network.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()

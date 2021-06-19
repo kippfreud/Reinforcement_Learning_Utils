@@ -61,7 +61,7 @@ a = train_parameters["agent"]
 agent = rlutils.make(a, env, agent_parameters[a])
 print(agent)
 obs = rlutils.Observer(state_dims=["cos_theta","sin_theta","theta_dot"], action_dims=1)
-rn = rlutils.train(agent, train_parameters, observer=obs)
+_, rn = rlutils.train(agent, train_parameters, observer=obs)
 
 if train_parameters["observe_freq"]:
     import numpy as np

@@ -17,6 +17,3 @@ class RandomAgent(Agent):
             a += self.P["inertia"] * (self.a_last - a)
             self.a_last = a
         return a, {}
-
-    def per_timestep(self, state, action, reward, next_state, done): return
-    def per_episode(self): return

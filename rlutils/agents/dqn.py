@@ -26,6 +26,7 @@ class DqnAgent(Agent):
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Initialise epsilon-greedy for exploration.
+        # TODO: Move to exploration.py.
         self.epsilon = self.P["epsilon_start"]
         self.epsilon_decay_per_timestep = (self.P["epsilon_start"] - self.P["epsilon_end"]) / self.P["epsilon_decay"]
         # Tracking variables.

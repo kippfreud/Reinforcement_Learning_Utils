@@ -104,7 +104,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             # Log to weights and biases if applicable.
             if do_wandb: 
                 results["logs"]["reward_sum"] = reward_sum
-                for c, r in reward_components.items(): results["logs"][c] = r
+                if do_reward_components:
+                    for c, r in reward_components.items(): results["logs"][c] = r
                 wandb.log(results["logs"])
 
             # Save current agent model if applicable.

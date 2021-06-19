@@ -1,5 +1,6 @@
 import numpy as np
 
+# TODO: Work with Torch tensors rather than NumPy arrays.
 
 class OUNoise(object):
     """

@@ -25,3 +25,19 @@ class ReplayMemory:
     def sample(self, batch_size):
         """Retrieve a random sample of transitions."""
         return random.sample(self.memory, batch_size)
+
+# TODO: Unify.
+class PpoMemory:
+    def __init__(self):
+        self.state = []
+        self.action = []
+        self.log_prob = []
+        self.reward = []
+        self.done = []
+
+    def clear(self):
+        del self.state[:]
+        del self.action[:]
+        del self.log_prob[:]
+        del self.reward[:]
+        del self.done[:]

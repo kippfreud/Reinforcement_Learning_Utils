@@ -60,7 +60,7 @@ elif train_parameters["agent"] == "simple_model_based":
 agent = rlutils.make(train_parameters["agent"], env, agent_parameters)
 print(agent)
 obs = rlutils.Observer(state_dims=["pos","vel","ang","ang_vel"], action_dims=1)
-rn = rlutils.train(agent, train_parameters, renderer, observer=obs)
+_, rn = rlutils.train(agent, train_parameters, renderer, observer=obs)
 
 if train_parameters["observe_freq"]:
     obs.add_future(["reward"], gamma=agent.P["gamma"], new_dims=["return"]) # Add return dim.

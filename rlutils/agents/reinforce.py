@@ -28,7 +28,7 @@ class ReinforceAgent(Agent):
 
     def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection."""
-        state = state.to(self.device)
+        # state = state.to(self.device)
         if self.V is not None: action_probs, value = self.pi(state), self.V(state)
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
@@ -44,9 +44,10 @@ class ReinforceAgent(Agent):
     def update_on_episode(self):
         """Use the latest episode of experience to update the policy (and value) network parameters."""
         assert len(self.ep_predictions) == len(self.ep_rewards), \
-        "Need to store rewards using agent.rewards.append(reward) on each timestep."        
+        "Need to store rewards using agent.rewards.append(reward) on each timestep."     
+        # Loop backwards through the episode to compute Monte Carlo returns.   
         g, returns = 0, []
-        for reward in self.ep_rewards[::-1]: # Loop backwards through the episode.
+        for reward in self.ep_rewards[::-1]: 
             g = reward + (self.P["gamma"] * g)
             returns.insert(0, g)
         returns = torch.tensor(returns, device=self.device)

@@ -19,6 +19,7 @@ def make(agent, env, hyperparameters=dict()):
     elif agent == "ddpg":               from ..agents.ddpg import DdpgAgent as agent_class
     elif agent == "dqn":                from ..agents.dqn import DqnAgent as agent_class
     elif agent == "off_policy_mc":      from ..agents.off_policy_mc import OffPolicyMCAgent as agent_class
+    elif agent == "ppo":                from ..agents.ppo import PpoAgent as agent_class
     elif agent == "random":             from ..agents.random import RandomAgent as agent_class
     elif agent == "reinforce":          from ..agents.reinforce import ReinforceAgent as agent_class
     elif agent == "sac":                from ..agents.sac import SacAgent as agent_class

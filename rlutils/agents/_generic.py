@@ -15,3 +15,7 @@ class Agent:
     def __str__(self):
         P = "\n".join([f"| - {k} = {v}" for k, v in self.P.items()])
         return f"\n| {self.__class__.__name__} in {self.env} with hyperparameters:\n{P}\n"
+
+    def per_timestep(self, state, action, reward, next_state, done): pass
+
+    def per_episode(self): return {"logs": {}}

@@ -33,7 +33,8 @@ class DdpgAgent(Agent):
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Create noise process for exploration.
         if self.P["noise_params"][0] == "ou": self.noise = OUNoise(self.env.action_space, *self.P["noise_params"][1:])
-        if self.P["noise_params"][0] == "un": self.noise = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
+        elif self.P["noise_params"][0] == "un": self.noise = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
+        else: raise Exception()
         # Tracking variables.   
         self.total_ep = 0 # Used for noise decay.
         self.total_t = 0 # Used for policy update frequency for TD3.
@@ -46,7 +47,7 @@ class DdpgAgent(Agent):
         if do_extra:
             sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
             sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
-            extra = {"action_greedy":action_greedy}
+            extra = {"action_greedy": action_greedy}
             for i, Q in zip(["", "2"], self.Q):
                 extra[f"Q{i}"] = Q(sa).item(); extra[f"Q{i}_greedy"] = Q(sa_greedy).item()
         else: extra = {}       

@@ -13,7 +13,7 @@ default_hyperparameters = {
   },   
 
   "ddpg": {
-    "net_pi": [(None, 256), "R", (256, 256), "R", (256, None), "T"],
+    "net_pi": [(None, 256), "R", (256, 256), "R", (256, None), "T"], # Tanh policy (bounded in [-1,1]).
     "net_Q": [(None, 256), "R", (256, 256), "R", (256, 1)],
     "replay_capacity": 50000, # Size of replay buffer (starts overwriting when full).
     "batch_size": 128, # Size of batches to sample from replay buffer during learning.
@@ -21,7 +21,7 @@ default_hyperparameters = {
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
     "tau": 0.005, # Parameter for Polyak averaging of target network parameters.
-    "noise_params": ("ou", 0., 0.15, 0.3, 0.3, 1000),
+    "noise_params": ("ou", 0., 0.15, 0.3, 0.3, 1000), # mu, theta, initial sigma, final sigma, decay period (episodes).
     "td3": False, # Whether or not to enable the TD3 enhancements. 
     # --- If TD3 enabled ---
     "td3_noise_std": 0.2,
@@ -46,6 +46,19 @@ default_hyperparameters = {
   "off_policy_mc": {
     "gamma": 0.99, # Discount factor.
     "epsilon": 0.5
+  },
+
+  "ppo": {
+    "net_pi_cont": [(None, 64), "R", (64, 64), "R", (64, None), "T"], # Tanh policy (bounded in [-1,1]).
+    "net_pi_disc": [(None, 64), "R", (64, 64), "R", (64, None), "S"], # Softmax policy for discrete.
+    "net_V": [(None, 64), "R", (64, 64), "R", (64, None)],
+    "lr_pi": 3e-4,       
+    "lr_V": 1e-3,
+    "num_steps_per_update": 80, # Number of gradient steps per update.
+    "gamma": 0.99, # Discount factor.
+    "baseline": "Z", # Baselining method: either "off", "Z" or "adv".
+    "epsilon": 0.2, # Clip ratio for policy update.
+    "noise_params": ("norm", 0.6, 0.1, 0.05, int(2.5e5)), # Initial std, final std, decay rate, decay freq (timesteps).
   },
 
   "random": {

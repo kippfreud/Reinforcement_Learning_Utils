@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 class DdpgAgent(Agent):
     def __init__(self, env, hyperparameters):
-        assert type(env) == NormaliseActionWrapper, "Action space must be normalised for DDPG."
+        # assert type(env) == NormaliseActionWrapper, "Action space must be normalised for DDPG."
         Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
@@ -112,8 +112,8 @@ class DdpgAgent(Agent):
         """Operations to perform on each episode end during training."""
         if self.ep_losses: mean_policy_loss, mean_value_loss = np.nanmean(self.ep_losses, axis=0)
         else: mean_policy_loss, mean_value_loss = 0., 0.
-        self.noise.decay(self.total_ep)
         del self.ep_losses[:]; self.total_ep += 1
+        self.noise.decay(self.total_ep)
         return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.noise.sigma}}
 
 def _sa_concat(states, actions):

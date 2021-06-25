@@ -11,7 +11,7 @@ P_DEFAULT = {"num_episodes": 100, "render_freq": 1}
 def train(agent, P=P_DEFAULT, renderer=None, observer=None):
     return deploy(agent, P, True, renderer, observer)
 
-def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id=None, save_dir="runs"):
+def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id=None, save_dir="agents"):
 
     do_extra = "do_extra" in P and P["do_extra"] # Whether or not to request extra predictions from the agent.
     do_wandb = "wandb_monitor" in P and P["wandb_monitor"]
@@ -28,7 +28,12 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
         import wandb
         if run_id is None: run_id, resume = wandb.util.generate_id(), "never"
         else: resume = "must"
-        run = wandb.init(project=P["project_name"], id=run_id, resume=resume, monitor_gym=True, config={**agent.P, **P})
+        run = wandb.init(
+            project=P["project_name"], 
+            id=run_id, 
+            resume=resume, 
+            monitor_gym="video_to_wandb" in P and P["video_to_wandb"],
+            config={**agent.P, **P})
         run_name = run.name
         # if train: # TODO: Weight monitoring causes an error with STEVE.
             # try: 
@@ -97,6 +102,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                         reward_components[c] += r
                 state = next_state; t += 1
 
+            print(t, reward_sum)
+            
             # Perform some agent-specific operations on each episode if training.
             if train: results = agent.per_episode()    
             else: results = {"logs": {}}  

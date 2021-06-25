@@ -20,7 +20,7 @@ def make(agent, env, hyperparameters=dict()):
     elif agent == "dqn":                from ..agents.dqn import DqnAgent as agent_class
     elif agent == "off_policy_mc":      from ..agents.off_policy_mc import OffPolicyMCAgent as agent_class
     elif agent == "ppo":                from ..agents.ppo import PpoAgent as agent_class
-    elif agent == "random":             from ..agents.random import RandomAgent as agent_class
+    elif agent == "random":             from ..agents.random_agent import RandomAgent as agent_class
     elif agent == "reinforce":          from ..agents.reinforce import ReinforceAgent as agent_class
     elif agent == "sac":                from ..agents.sac import SacAgent as agent_class
     elif agent == "simple_model_based": from ..agents.simple_model_based import SimpleModelBasedAgent as agent_class
@@ -28,4 +28,4 @@ def make(agent, env, hyperparameters=dict()):
     elif agent == "steve":              from ..agents.steve import SteveAgent as agent_class
     return agent_class(env, P)
 
-def load(path): return torch_load(path)
+def load(path, env): agent = torch_load(path); agent.env = env; return agent

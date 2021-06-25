@@ -32,7 +32,10 @@ class CustomRewardWrapper(gym.Wrapper):
         super().__init__(self.env)
         if R is not None: self.R = R # This is the reward function.
 
-    def R(_, __, ___, reward, done, ____): return reward, done, {} # Default if None.
+    def R(self, state, next_state, action, reward, done, info): 
+        """Default to wiping reward function."""
+        return 0., False, {}
+        # return reward, done, {} 
 
     def reset(self): self.state = self.env.reset().copy(); return self.state
         

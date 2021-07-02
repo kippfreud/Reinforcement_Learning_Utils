@@ -46,6 +46,19 @@ class CustomRewardWrapper(gym.Wrapper):
         return self.state, reward, done, {**info, **info_add}
 
 
+class DoneWipeWrapper(gym.Wrapper): 
+    """
+    Forces done = False.
+    """
+    def __init__(self, env): 
+        self.env = env
+        super().__init__(env)
+    
+    def step(self, action): 
+        next_state, reward, _, info = self.env.step(action)
+        return next_state, reward, False, info
+
+
 class MetaFeatureWrapper(gym.Wrapper):
     """
     Constructs a dictionary of additional observation features, that are *not* given to the agent, but are instead appended to info. 

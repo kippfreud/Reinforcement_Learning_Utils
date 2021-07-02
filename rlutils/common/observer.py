@@ -30,7 +30,7 @@ class Observer:
         # Initialise empty dataset.
         self.data, self.first = [], True
 
-    def observe(self, ep, t, state, action, next_state, reward, info, extra):
+    def observe(self, ep, t, state, action, next_state, reward, done, info, extra):
         """Make an observation of a single timestep."""
         if self.first: extra_dim_names = []
         # Basics: state, action, next_state, reward.

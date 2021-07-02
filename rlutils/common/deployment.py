@@ -22,8 +22,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
     else: do_observe = False
     do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
 
-    # Initialise weights and biases monitoring.
     if do_wandb: 
+        # Initialise weights and biases monitoring.
         assert not type(agent)==StableBaselinesAgent, "wandb monitoring not implemented for StableBaselinesAgent."
         import wandb
         if run_id is None: run_id, resume = wandb.util.generate_id(), "never"
@@ -46,6 +46,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             # except: pass
     else:
         import time; run_id, run_name = None, time.strftime("%Y-%m-%d_%H-%M-%S")
+    # Tell observer what the run name is.
+    if do_observe: observer.run_name = run_name
 
     # Add wrappers to environment.
     if "episode_time_limit" in P and P["episode_time_limit"]: # Time limit.
@@ -78,7 +80,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                 next_state, reward, done, info = agent.env.step(action)
 
                 # Send an observation to the observer if applicable.
-                if observe_this_ep: observer.observe(ep, t, state, action, next_state, reward, info, extra)
+                if observe_this_ep: observer.observe(ep, t, state, action, next_state, reward, done, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: agent.env.render()
@@ -102,7 +104,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                         reward_components[c] += r
                 state = next_state; t += 1
 
-            print(t, reward_sum)
+            # print(t, reward_sum)
             
             # Perform some agent-specific operations on each episode if training.
             if train: results = agent.per_episode()    

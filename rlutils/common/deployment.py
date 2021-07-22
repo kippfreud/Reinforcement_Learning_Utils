@@ -104,7 +104,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                         reward_components[c] += r
                 state = next_state; t += 1
 
-            # print(t, reward_sum)
+            print(t, reward_sum)
             
             # Perform some agent-specific operations on each episode if training.
             if train: results = agent.per_episode()    

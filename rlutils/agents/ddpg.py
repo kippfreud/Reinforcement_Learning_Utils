@@ -1,12 +1,14 @@
 """
 DESCRIPTION
+
+TODO: Make TD3 inherit from DDPG, rather than complicating this class with if statements.
 """
 
 from ._generic import Agent
-from ..common.env_wrappers import NormaliseActionWrapper
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
 from ..common.exploration import OUNoise, UniformNoise
+from ..common.utils import col_concat
 
 import numpy as np
 import torch
@@ -15,7 +17,6 @@ import torch.nn.functional as F
 
 class DdpgAgent(Agent):
     def __init__(self, env, hyperparameters):
-        # assert type(env) == NormaliseActionWrapper, "Action space must be normalised for DDPG."
         Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
@@ -45,8 +46,8 @@ class DdpgAgent(Agent):
         action_greedy = self.pi(state).cpu().detach().numpy()[0]
         action = self.noise.get_action(action_greedy) if explore else action_greedy
         if do_extra:
-            sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
-            sa_greedy = _sa_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
+            sa = col_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
+            sa_greedy = col_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
             extra = {"action_greedy": action_greedy}
             for i, Q in zip(["", "2"], self.Q):
                 extra[f"Q{i}"] = Q(sa).item(); extra[f"Q{i}_greedy"] = Q(sa_greedy).item()
@@ -74,20 +75,20 @@ class DdpgAgent(Agent):
                 nonterminal_next_actions = (nonterminal_next_actions + noise).clamp(-1, 1)
             # Use target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. This is the "clipped double Q trick".
             next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
-            next_Q_values[nonterminal_mask] = torch.min(*(Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
+            next_Q_values[nonterminal_mask] = torch.min(*(Q_target(col_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
             # Compute target = reward + discounted Q_target(s', a').
             Q_targets = (rewards + (self.P["gamma"] * next_Q_values)).detach()
         value_loss_sum = 0.
         for Q in self.Q:    
             # Update value in the direction of TD error using Huber loss. 
-            value_loss = F.smooth_l1_loss(Q(_sa_concat(states, actions)).squeeze(), Q_targets)
+            value_loss = F.smooth_l1_loss(Q(col_concat(states, actions)).squeeze(), Q_targets)
             Q.optimise(value_loss)
             value_loss_sum += value_loss.item()
         policy_loss = np.nan
         if (not self.P["td3"]) or (self.total_t % self.P["td3_policy_freq"] == 0): # For TD3, only update policy and targets every N timesteps.
             # Update policy in the direction of increasing value according to self.Q (the policy gradient).
             # This means that the policy function approximates the argmax() operation used in Q learning for discrete action spaces.
-            policy_loss = -self.Q[0](_sa_concat(states, self.pi(states))).mean() # NOTE: Using first Q network only.
+            policy_loss = -self.Q[0](col_concat(states, self.pi(states))).mean() # NOTE: Using first Q network only.
             self.pi.optimise(policy_loss)
             policy_loss = policy_loss.item()
         # Perform soft (Polyak) updates on targets.
@@ -115,7 +116,3 @@ class DdpgAgent(Agent):
         del self.ep_losses[:]; self.total_ep += 1
         self.noise.decay(self.total_ep)
         return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.noise.sigma}}
-
-def _sa_concat(states, actions):
-    """Concatenate states and actions into a single input vector for Q networks."""
-    return torch.cat([states, actions], 1).float()

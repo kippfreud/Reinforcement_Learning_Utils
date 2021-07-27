@@ -1,10 +1,11 @@
 """
-DESCRIPTION
+Soft actor-critic (SAC) agent for continuous action spaces.
 """
 
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
+from ..common.utils import col_concat
 
 import numpy as np
 import torch
@@ -36,11 +37,13 @@ class SacAgent(Agent):
         action, log_prob = self._pi_to_action_and_log_prob(self.pi(state))
         return action.cpu().detach().numpy()[0], {}
 
-    def update_on_batch(self):
-        """Use a random batch from the replay memory to update the pi and Q network parameters."""
-        if len(self.memory) < self.P["batch_size"]: return
-        # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
-        batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
+    def update_on_batch(self, batch=None):
+        """Use a random batch from the replay memory to update the pi and Q network parameters.
+        If the DIAYN algorithm is wrapped around SAC, the batch will be given."""
+        if batch is None:
+            if len(self.memory) < self.P["batch_size"]: return
+            # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
+            batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
@@ -50,7 +53,7 @@ class SacAgent(Agent):
         nonterminal_next_actions, nonterminal_next_log_probs = self._pi_to_action_and_log_prob(self.pi(nonterminal_next_states))
         # Use target Q networks to compute Q_target(s', a') for each nonterminal next state and take the minimum value. This is the "clipped double Q trick".
         next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
-        next_Q_values[nonterminal_mask] = torch.min(*(Q_target(_sa_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
+        next_Q_values[nonterminal_mask] = torch.min(*(Q_target(col_concat(nonterminal_next_states, nonterminal_next_actions)) for Q_target in self.Q_target)).squeeze()       
         # Subtract entropy term, creating soft Q values.
         next_Q_values[nonterminal_mask] -= self.P["alpha"] * nonterminal_next_log_probs
         # Compute target = reward + discounted soft Q_target(s', a').
@@ -58,12 +61,12 @@ class SacAgent(Agent):
         value_loss_sum = 0.
         for Q in self.Q:    
             # Update value in the direction of entropy-regularised TD error using Huber loss. 
-            value_loss = F.smooth_l1_loss(Q(_sa_concat(states, actions)).squeeze(), Q_targets)
+            value_loss = F.smooth_l1_loss(Q(col_concat(states, actions)).squeeze(), Q_targets)
             Q.optimise(value_loss)
             value_loss_sum += value_loss.item()
         # Re-evaluate actions using the current pi network and get their values using the current Q networks. Again use the clipped double Q trick. 
         actions_new, log_probs_new = self._pi_to_action_and_log_prob(self.pi(states))
-        Q_values_new = torch.min(*(Q(_sa_concat(states, actions_new)) for Q in self.Q))
+        Q_values_new = torch.min(*(Q(col_concat(states, actions_new)) for Q in self.Q))
         # Update policy in the direction of increasing value according to self.Q (the policy gradient), plus entropy regularisation.
         policy_loss = ((self.P["alpha"] * log_probs_new) - Q_values_new).mean()
         self.pi.optimise(policy_loss)
@@ -102,7 +105,3 @@ class SacAgent(Agent):
         log_prob = gaussian.log_prob(action_unsquashed).sum(axis=-1)
         log_prob -= (2 * (np.log(2) - action_unsquashed - F.softplus(-2 * action_unsquashed))).sum(axis=1)
         return action, log_prob
-
-def _sa_concat(states, actions):
-    """Concatenate states and actions into a single input vector for Q networks."""
-    return torch.cat([states, actions], 1).float()

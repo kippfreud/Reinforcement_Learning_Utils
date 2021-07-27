@@ -5,9 +5,10 @@ NOTE: Currently requires reward function to be provided rather than learned.
 NOTE: The model is also set up to predict state *derivatives*, unlike in the original paper. 
 """
 
-from .ddpg import DdpgAgent, _sa_concat # STEVE inherits from DDPG.
+from .ddpg import DdpgAgent # STEVE inherits from DDPG.
 from ._default_hyperparameters import default_hyperparameters
 from ..common.networks import SequentialNetwork
+from ..common.utils import col_concat
 
 import numpy as np
 import torch
@@ -50,7 +51,7 @@ class SteveAgent(DdpgAgent):
 
     def predict(self, state, action, mode="mean"):
         """Use both models (mean) to predict the next state given a single state-action pair."""
-        sa = _sa_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
+        sa = col_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
         ds = torch.cat([model(sa).detach() for model in self.models])
         if mode == "mean": return state[0] + ds.mean(axis=0)
         elif mode == "all": return state[0] + ds
@@ -70,7 +71,7 @@ class SteveAgent(DdpgAgent):
                 actions = torch.cat(batch.action)
                 next_states = torch.cat(batch.next_state)
                 # Update model in the direction of the true change in state using MSE loss.
-                states_and_actions = _sa_concat(states, actions)
+                states_and_actions = col_concat(states, actions)
                 target = next_states - states_and_actions[:,:self.state_dim]
                 prediction = model(states_and_actions)
                 loss = F.mse_loss(prediction, target)
@@ -92,7 +93,7 @@ class SteveAgent(DdpgAgent):
             for j, target_net in enumerate(self.Q_target):
                 next_actions = self.pi_target(next_states) # Select a' using the target pi network.
                 # Same target for all models at this point.
-                Q_targets[:,0,:,j] = (rewards + self.P["gamma"] * target_net(_sa_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
+                Q_targets[:,0,:,j] = (rewards + self.P["gamma"] * target_net(col_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
             for i, model in enumerate(self.models):  
                 # Run a forward simulation for each model. 
                 sim_states, sim_actions, g = next_states, next_actions, 0      
@@ -101,11 +102,11 @@ class SteveAgent(DdpgAgent):
                     sim_rewards = [self.P["reward_function"](s, self._action_scale(a)) for s, a in zip(sim_states, sim_actions)]
                     g += (self.P["gamma"] ** h) * torch.Tensor(sim_rewards).reshape(-1, 1)
                     # Use model and target pi network to advance states and actions.
-                    sim_states += model(_sa_concat(sim_states, sim_actions)) # Model predicts derivatives.
+                    sim_states += model(col_concat(sim_states, sim_actions)) # Model predicts derivatives.
                     sim_actions = self.pi_target(sim_states)
                     # Store Q_targets for this horizon.
                     for j, target_net in enumerate(self.Q_target): 
-                        Q_targets[:,h,i,j] = (g + ((self.P["gamma"] ** (h+1)) * target_net(_sa_concat(sim_states, sim_actions)))).squeeze()
+                        Q_targets[:,h,i,j] = (g + ((self.P["gamma"] ** (h+1)) * target_net(col_concat(sim_states, sim_actions)))).squeeze()
         # Inverse variance weighting of horizons. 
         var = Q_targets.var(dim=(2, 3)) + self.eps # Prevent div/0 error.
         inverse_var = 1 / var

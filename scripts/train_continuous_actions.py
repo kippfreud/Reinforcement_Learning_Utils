@@ -14,7 +14,7 @@ train_parameters = {
     "state_dims":           ["pos","vel"],
 
     "agent":                "diayn",
-    "num_episodes":         500,
+    "num_episodes":         1000,
     "episode_time_limit":   200,
     "from_pixels":          False,
     "wandb_monitor":        True,
@@ -28,7 +28,7 @@ train_parameters = {
 # Make environment.
 env = gym.make(train_parameters["env"]).unwrapped # Needed to impose custom time limit.
 
-if train_parameters["agent"] in ("ddpg","td3","sac","steve"):
+if train_parameters["agent"] in ("ddpg","td3","sac","diayn","steve"):
     env = NormaliseActionWrapper(env) # Actions in [-1, 1]
 
 agent_parameters = {}
@@ -57,7 +57,7 @@ agent_parameters["sac"] = {
     "tau":                  0.01,
 }
 agent_parameters["diayn"] = {
-    "num_skills":           5, 
+    "num_skills":           20, 
     "sac_parameters":       {"batch_size": 128, "alpha": 0.1, "tau": 0.01}
 }
 agent_parameters["simple_model_based"] = {

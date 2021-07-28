@@ -24,7 +24,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
     do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
 
     if do_wandb: 
-        # Initialise weights and biases monitoring.
+        # Initialise Weights & Biases monitoring.
         assert not type(agent)==StableBaselinesAgent, "wandb monitoring not implemented for StableBaselinesAgent."
         import wandb
         if run_id is None: run_id, resume = wandb.util.generate_id(), "never"
@@ -104,14 +104,13 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                         if c not in reward_components: reward_components[c] = 0.
                         reward_components[c] += r
                 state = next_state; t += 1
-
-            print(t, reward_sum)
             
-            # Perform some agent-specific operations on each episode if training.
+            # Perform some agent-specific operations on each episode.
             if train: results = agent.per_episode()    
+            elif hasattr(agent, "per_episode_deploy"): results = agent.per_episode_deploy()    
             else: results = {"logs": {}}  
 
-            # Log to weights and biases if applicable.
+            # Log to Weights & Biases if applicable.
             if do_wandb: 
                 results["logs"]["reward_sum"] = reward_sum
                 if do_reward_components:

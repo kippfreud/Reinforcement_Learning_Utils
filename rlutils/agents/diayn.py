@@ -72,11 +72,14 @@ class DiaynAgent(SacAgent):
         out["logs"]["discriminator_loss"] = np.mean(self.ep_losses_discriminator) if self.ep_losses_discriminator else 0.
         out["logs"]["pseudo_reward_sum"] = self.ep_pseudo_reward_sum
         del self.ep_losses_discriminator[:]; self.ep_pseudo_reward_sum = 0.
-        self.skill = self._sample_skill() # Resample skill for the next episode.
+        self.per_episode_deploy()
         return out
 
+    def per_episode_deploy(self):
+        self.skill = self._sample_skill() # Resample skill for the next episode.
+
     def _sample_skill(self):
-        """Sample skill from p(z), using probabilities in self.p_z.""" 
+        """Sample skill according to probabilities in self.p_z.""" 
         return np.random.choice(self.P["num_skills"], p=self.p_z)
 
     def _pseudo_reward(self, state, skill):

@@ -34,6 +34,7 @@ class DiaynAgent(SacAgent):
         # Tracking variables.
         self.skill = self._sample_skill() # Initialise skill.
         self.ep_losses_discriminator = []
+        self.ep_pseudo_reward_sum = 0.
 
     def act(self, state, skill=None, explore=True, do_extra=False):
         """Augment state with one-hot skill vector, then use SAC action selection."""
@@ -61,13 +62,16 @@ class DiaynAgent(SacAgent):
         # Augment state and next state with one-hot skill vector and compute diversity reward.
         if skill is None: skill = self.skill
         z = one_hot(skill, self.P["num_skills"], self.device)
-        SacAgent.per_timestep(self, col_concat(state, z), action, self._pseudo_reward(state, skill), col_concat(next_state, z), done)
+        pseudo_reward = self._pseudo_reward(state, skill)
+        self.ep_pseudo_reward_sum += pseudo_reward
+        SacAgent.per_timestep(self, col_concat(state, z), action, pseudo_reward, col_concat(next_state, z), done)
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""
         out = SacAgent.per_episode(self)
         out["logs"]["discriminator_loss"] = np.mean(self.ep_losses_discriminator) if self.ep_losses_discriminator else 0.
-        del self.ep_losses_discriminator[:]
+        out["logs"]["pseudo_reward_sum"] = self.ep_pseudo_reward_sum
+        del self.ep_losses_discriminator[:]; self.ep_pseudo_reward_sum = 0.
         self.skill = self._sample_skill() # Resample skill for the next episode.
         return out
 

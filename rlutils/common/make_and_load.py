@@ -17,6 +17,7 @@ def make(agent, env, hyperparameters=dict()):
     # Load agent class.
     if agent == "actor_critic":         from ..agents.actor_critic import ActorCriticAgent as agent_class
     elif agent == "ddpg":               from ..agents.ddpg import DdpgAgent as agent_class
+    elif agent == "diayn":              from ..agents.diayn import DiaynAgent as agent_class
     elif agent == "dqn":                from ..agents.dqn import DqnAgent as agent_class
     elif agent == "off_policy_mc":      from ..agents.off_policy_mc import OffPolicyMCAgent as agent_class
     elif agent == "ppo":                from ..agents.ppo import PpoAgent as agent_class

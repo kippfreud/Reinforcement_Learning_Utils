@@ -70,17 +70,17 @@ class DqnAgent(Agent):
         if self.P["reward_components"] > 1: 
             Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, -1)[torch.arange(self.P["batch_size"]), actions, :]
             Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.env.action_space.n, -1)
-            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).sum(axis=2).max(1)[1].detach()
-            else: nonterminal_next_actions = Q_t_n.sum(axis=2).max(1)[1].detach()
+            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).sum(axis=2).argmax(1).detach()
+            else: nonterminal_next_actions = Q_t_n.sum(axis=2).argmax(1).detach()
         # ===================
         #
         else: 
             # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
             Q_values = self.Q(states).gather(1, actions.reshape(-1,1))
             # In double DQN, a' is the Q-maximising action for self.Q. This decorrelation reduces overestimation bias.
-            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).max(1)[1].detach()
+            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).argmax(1).detach()
             # In regular DQN, a' is the Q-maximising action for self.Q_target.
-            else: nonterminal_next_actions = Q_t_n.max(1)[1].detach()
+            else: nonterminal_next_actions = Q_t_n.argmax(1).detach()
             Q_t_n = Q_t_n.unsqueeze(-1)
             rewards = rewards.unsqueeze(-1)
         next_Q_values[nonterminal_mask] = Q_t_n[torch.arange(Q_t_n.shape[0]), nonterminal_next_actions, :]        

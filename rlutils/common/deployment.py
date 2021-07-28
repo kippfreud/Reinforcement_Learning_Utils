@@ -6,7 +6,8 @@ import numpy as np
 from tqdm import tqdm
 
 
-P_DEFAULT = {"num_episodes": 100, "render_freq": 1}
+P_DEFAULT = {"num_episodes": 1, "render_freq": 1}
+
 
 def train(agent, P=P_DEFAULT, renderer=None, observer=None):
     return deploy(agent, P, True, renderer, observer)

@@ -16,15 +16,18 @@ from torch.distributions.normal import Normal
 class SacAgent(Agent):
     def __init__(self, env, hyperparameters):
         Agent.__init__(self, env, hyperparameters)
+        # If the DIAYN algorithm is wrapped around SAC, the observation space is augmented by a one-hot skill vector.
+        if "aug_obs_shape" in self.P: obs_shape = self.P["aug_obs_shape"]
+        else: obs_shape = self.env.observation_space.shape
         # Create pi and Q networks.
-        if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
+        if len(obs_shape) > 1: raise NotImplementedError()
         # Policy outputs mean and standard deviation.
-        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=self.env.observation_space.shape[0], output_size=2*self.env.action_space.shape[0], lr=self.P["lr_pi"]).to(self.device)
+        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=obs_shape[0], output_size=2*self.env.action_space.shape[0], lr=self.P["lr_pi"]).to(self.device)
         self.Q, self.Q_target = [], []
         for _ in range(2): # We have two Q networks, each with their corresponding targets.
             # Action is an *input* to the Q network here.
-            Q = SequentialNetwork(code=self.P["net_Q"], input_shape=self.env.observation_space.shape[0]+self.env.action_space.shape[0], output_size=1, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
-            Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=self.env.observation_space.shape[0]+self.env.action_space.shape[0], output_size=1, eval_only=True).to(self.device)
+            Q = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
+            Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, eval_only=True).to(self.device)
             Q_target.load_state_dict(Q.state_dict()) # Clone.
             self.Q.append(Q); self.Q_target.append(Q_target)
         # Create replay memory.

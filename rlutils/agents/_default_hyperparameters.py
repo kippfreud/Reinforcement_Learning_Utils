@@ -12,6 +12,14 @@ default_hyperparameters = {
     "gamma": 0.99 # Discount factor.
   },   
 
+  "diayn": { # See https://github.com/haarnoja/sac/blob/8258e33633c7e37833cc39315891e77adfbe14b2/examples/mujoco_all_diayn.py.
+    "net_disc": [(None, 256), "R", (256, 256), "R", (256, None)], # Outputs log skill probabilities.
+    "lr_disc": 3e-4, # Learning rate for discriminator.
+    "num_skills": 50, # Number of skills. NOTE: Highly environment-dependent!
+    "log_p_z_in_reward": True, # Whether or not to include -log(p(z)) term in pseudo-reward.
+    "sac_parameters": {"batch_size": 128, "alpha": 0.1, "tau": 0.01} # DIAYN is built around SAC.
+  },
+
   "ddpg": {
     "net_pi": [(None, 256), "R", (256, 256), "R", (256, None), "T"], # Tanh policy (bounded in [-1,1]).
     "net_Q": [(None, 256), "R", (256, 256), "R", (256, 1)],

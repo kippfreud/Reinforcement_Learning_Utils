@@ -1,6 +1,7 @@
 wandb/**
 video/**
 runs/**
+agents/**
 __pycache__/
 .idea/
 *.out

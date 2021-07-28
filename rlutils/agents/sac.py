@@ -16,7 +16,7 @@ from torch.distributions.normal import Normal
 class SacAgent(Agent):
     def __init__(self, env, hyperparameters):
         Agent.__init__(self, env, hyperparameters)
-        # If the DIAYN algorithm is wrapped around SAC, the observation space is augmented by a one-hot skill vector.
+        # NOTE:If the DIAYN algorithm is wrapped around SAC, the observation space is augmented by a one-hot skill vector.
         if "aug_obs_shape" in self.P: obs_shape = self.P["aug_obs_shape"]
         else: obs_shape = self.env.observation_space.shape
         # Create pi and Q networks.

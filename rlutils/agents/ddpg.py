@@ -56,7 +56,7 @@ class DdpgAgent(Agent):
 
     def update_on_batch(self, states=None, actions=None, Q_targets=None):
         """Use a random batch from the replay memory to update the pi and Q network parameters.
-        If the STEVE algorithm is wrapped around DDPG, states, actions and Q_targets will be given."""
+        NOTE: If the STEVE algorithm is wrapped around DDPG, states, actions and Q_targets will be given."""
         if states is None:
             if len(self.memory) < self.P["batch_size"]: return
             # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).

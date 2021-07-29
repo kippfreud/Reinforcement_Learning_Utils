@@ -16,6 +16,7 @@ default_hyperparameters = {
     "net_disc": [(None, 256), "R", (256, 256), "R", (256, None)], # Outputs log skill probabilities.
     "lr_disc": 3e-4, # Learning rate for discriminator.
     "num_skills": 50, # Number of skills. NOTE: Highly environment-dependent!
+    "include_actions": False, # Whether or not to include action dimensions in discriminator input.
     "log_p_z_in_reward": True, # Whether or not to include -log(p(z)) term in pseudo-reward.
     "sac_parameters": {"batch_size": 128, "alpha": 0.1, "tau": 0.01} # DIAYN is built around SAC.
   },

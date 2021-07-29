@@ -27,8 +27,9 @@ class DiaynAgent(SacAgent):
         # Add parameters specific to DIAYN.
         for k, v in hyperparameters.items(): 
             if k != "sac_parameters": self.P[k] = v
-        # Create skill discriminator network.
-        self.discriminator = SequentialNetwork(code=self.P["net_disc"], input_shape=self.state_dim, output_size=self.P["num_skills"], lr=self.P["lr_disc"]).to(self.device)
+        # Create skill discriminator network, optionally accepting action dimensions as inputs alongside state dimensions.
+        disc_input = self.state_dim + (self.env.action_space.shape[0] if self.P["include_actions"] else 0)
+        self.discriminator = SequentialNetwork(code=self.P["net_disc"], input_shape=disc_input, output_size=self.P["num_skills"], lr=self.P["lr_disc"]).to(self.device)
         # Skill distribution.
         self.p_z = np.full(self.P["num_skills"], 1.0 / self.P["num_skills"]) # NOTE: Uniform.
         # Tracking variables.
@@ -49,9 +50,10 @@ class DiaynAgent(SacAgent):
         if len(self.memory) < self.P["batch_size"]: return
         # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-        states, zs = torch.split(torch.cat(batch.state), [self.state_dim, self.P["num_skills"]], dim=1)
+        features, zs = torch.split(torch.cat(batch.state), [self.state_dim, self.P["num_skills"]], dim=1)
+        if self.P["include_actions"]: features = col_concat(features, torch.cat(batch.action))
         # Update discriminator to minimise cross-entropy loss against skills.
-        loss = F.cross_entropy(self.discriminator(states), zs.argmax(1))   
+        loss = F.cross_entropy(self.discriminator(features), zs.argmax(1))   
         self.discriminator.optimise(loss)
         self.ep_losses_discriminator.append(loss.item()) # Keeping separate prevents confusion of SAC methods.
         # Send same batch to SAC update function and return losses.
@@ -62,7 +64,9 @@ class DiaynAgent(SacAgent):
         # Augment state and next state with one-hot skill vector and compute diversity reward.
         if skill is None: skill = self.skill
         z = one_hot(skill, self.P["num_skills"], self.device)
-        pseudo_reward = self._pseudo_reward(state, skill)
+        pseudo_reward = self._pseudo_reward(
+            col_concat(state, torch.tensor([action], device=self.device, dtype=torch.float)) 
+            if self.P["include_actions"] else state, skill)
         self.ep_pseudo_reward_sum += pseudo_reward
         SacAgent.per_timestep(self, col_concat(state, z), action, pseudo_reward, col_concat(next_state, z), done)
 
@@ -82,10 +86,10 @@ class DiaynAgent(SacAgent):
         """Sample skill according to probabilities in self.p_z.""" 
         return np.random.choice(self.P["num_skills"], p=self.p_z)
 
-    def _pseudo_reward(self, state, skill):
+    def _pseudo_reward(self, features, skill):
         """Construct diversity-promoting pseudo-reward using skill discriminator network."""
         # Log conditional probability of skill according to discriminator.
-        reward = - F.cross_entropy(self.discriminator(state), torch.tensor([skill])).item()
+        reward = - F.cross_entropy(self.discriminator(features), torch.tensor([skill])).item()
         if self.P["log_p_z_in_reward"]:
             # Log prior probability of skill. Subtracting this means rewards are non-negative as long as the discriminator does better than chance.
             reward -= np.log(self.p_z[skill])

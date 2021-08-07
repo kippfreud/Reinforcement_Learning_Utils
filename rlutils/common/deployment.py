@@ -48,7 +48,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
     else:
         import time; run_id, run_name = None, time.strftime("%Y-%m-%d_%H-%M-%S")
     # Tell observer what the run name is.
-    if do_observe: observer.run_name = run_name
+    if do_observe: observer.run_names.append(run_name)
 
     # Add wrappers to environment.
     if "episode_time_limit" in P and P["episode_time_limit"]: # Time limit.
@@ -108,14 +108,14 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             # Perform some agent-specific operations on each episode.
             if train: results = agent.per_episode()    
             elif hasattr(agent, "per_episode_deploy"): results = agent.per_episode_deploy()    
-            else: results = {"logs": {}}  
+            else: results = {"logs": {}} 
 
-            # Log to Weights & Biases if applicable.
-            if do_wandb: 
-                results["logs"]["reward_sum"] = reward_sum
-                if do_reward_components:
-                    for c, r in reward_components.items(): results["logs"][c] = r
-                wandb.log(results["logs"])
+            # Add further logs and send to Weights & Biases if applicable.
+            results["logs"]["reward_sum"] = reward_sum
+            if observe_this_ep and hasattr(observer, "per_episode"): 
+                results["logs"].update(observer.per_episode())
+            if do_reward_components: results["logs"].update(reward_components)
+            if do_wandb: wandb.log(results["logs"])
 
             # Save current agent model if applicable.
             if checkpoint_this_ep:

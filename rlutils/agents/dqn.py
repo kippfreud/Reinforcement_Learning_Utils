@@ -36,7 +36,7 @@ class DqnAgent(Agent):
 
     def act(self, state, explore=True, do_extra=False):
         """Epsilon-greedy action selection."""
-        Q = self.Q(state).reshape(self.env.action_space.n,-1)
+        Q = self.Q(state).reshape(self.env.action_space.n, self.P["reward_components"])
         # If using decomposed rewards, need to take sum.
         #
         # ===================
@@ -68,9 +68,9 @@ class DqnAgent(Agent):
         # 
         # ===================
         if self.P["reward_components"] > 1: 
-            Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, -1)[torch.arange(self.P["batch_size"]), actions, :]
-            Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.env.action_space.n, -1)
-            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).sum(axis=2).argmax(1).detach()
+            Q_values = self.Q(states).reshape(self.P["batch_size"], self.env.action_space.n, self.P["reward_components"])[torch.arange(self.P["batch_size"]), actions, :]
+            Q_t_n = Q_t_n.reshape(Q_t_n.shape[0], self.env.action_space.n, self.P["reward_components"])
+            if self.P["double"]: nonterminal_next_actions = self.Q(nonterminal_next_states).reshape(*Q_t_n.shape).sum(axis=2).argmax(1).detach()
             else: nonterminal_next_actions = Q_t_n.sum(axis=2).argmax(1).detach()
         # ===================
         #

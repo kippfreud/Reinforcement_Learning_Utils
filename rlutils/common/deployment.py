@@ -22,6 +22,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
         else: raise Exception("No observer provided!") 
     else: do_observe = False
     do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
+    do_reward_decomposition = "reward_components" in agent.P and agent.P["reward_components"] > 1
 
     if do_wandb: 
         # Initialise Weights & Biases monitoring.
@@ -72,6 +73,9 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             # Get state representation.
             if renderer: state = renderer.get(first=True)
             else: state = torch.from_numpy(state).float().to(agent.device).unsqueeze(0)
+
+            # NOTE: running observer.per_episode() *before* episode, as needed for PbRL project.
+            observer_logs = observer.per_episode() if observe_this_ep and hasattr(observer, "per_episode") else {}
             
             # Iterate through timesteps.
             while not done:
@@ -91,18 +95,22 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                 else: next_state = torch.from_numpy(next_state).float().to(agent.device).unsqueeze(0)
 
                 # Perform some agent-specific operations on each timestep if training.
-                if train: agent.per_timestep(state, action, reward, next_state, done)
+                if train: agent.per_timestep(state, action, 
+                                info["reward_components"] if do_reward_decomposition else reward, 
+                                next_state, done)
 
                 # Update tracking variables.
                 reward_sum += np.float64(reward).sum()
                 if t == 0: 
-                    if ep == 0: do_reward_components = "reward_components" in info
-                    if do_reward_components: reward_components = {}
-                if do_reward_components:
-                    for c, r in info["reward_components"].items(): 
-                        c = f"reward_{c}"
-                        if c not in reward_components: reward_components[c] = 0.
-                        reward_components[c] += r
+                    if ep == 0: track_components = "reward_components" in info
+                    if track_components: reward_components_sum = np.array(info["reward_components"])
+                elif track_components:   reward_components_sum += info["reward_components"]
+                #     if track_components: reward_components_sum = {}
+                # if track_components:
+                #     for c, r in info["reward_components"].items(): 
+                #         c = f"reward_{c}"
+                #         if c not in reward_components_sum: reward_components_sum[c] = 0.
+                #         reward_components_sum[c] += r
                 state = next_state; t += 1
             
             # Perform some agent-specific operations on each episode.
@@ -111,10 +119,9 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             else: results = {"logs": {}} 
 
             # Add further logs and send to Weights & Biases if applicable.
+            results["logs"].update(observer_logs)
             results["logs"]["reward_sum"] = reward_sum
-            if observe_this_ep and hasattr(observer, "per_episode"): 
-                results["logs"].update(observer.per_episode())
-            if do_reward_components: results["logs"].update(reward_components)
+            if track_components: results["logs"].update({f"reward_{c}": r for c, r in enumerate(reward_components_sum)})
             if do_wandb: wandb.log(results["logs"])
 
             # Save current agent model if applicable.

@@ -34,8 +34,7 @@ class CustomRewardWrapper(gym.Wrapper):
 
     def R(self, state, action, next_state, reward, done, info): 
         """Default to wiping reward function."""
-        return 0., done, {}
-        # return reward, done, {} 
+        return 0., done, {"reward_components": []}
 
     def reset(self): self.state = self.env.reset().copy(); return self.state
         

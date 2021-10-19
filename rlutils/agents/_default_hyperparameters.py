@@ -49,7 +49,7 @@ default_hyperparameters = {
     "epsilon_decay": 500000,
     "target_update": ("soft", 0.0005), # Either ("hard", freq) or ("soft", tau).
     "double": True, # Whether to enable double DQN variant to reduce overestimation bias.
-    "reward_components": 1 # For reward decomposition.
+    "reward_components": None # For reward decomposition (set to None to disable).
   },
 
   "off_policy_mc": {

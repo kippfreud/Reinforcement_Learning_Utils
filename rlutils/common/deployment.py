@@ -22,7 +22,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
         else: raise Exception("No observer provided!") 
     else: do_observe = False
     do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
-    do_reward_decomposition = "reward_components" in agent.P and agent.P["reward_components"] > 1
+    do_reward_decomposition = "reward_components" in agent.P and agent.P["reward_components"] is not None
 
     if do_wandb: 
         # Initialise Weights & Biases monitoring.
@@ -105,12 +105,6 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                     if ep == 0: track_components = "reward_components" in info
                     if track_components: reward_components_sum = np.array(info["reward_components"])
                 elif track_components:   reward_components_sum += info["reward_components"]
-                #     if track_components: reward_components_sum = {}
-                # if track_components:
-                #     for c, r in info["reward_components"].items(): 
-                #         c = f"reward_{c}"
-                #         if c not in reward_components_sum: reward_components_sum[c] = 0.
-                #         reward_components_sum[c] += r
                 state = next_state; t += 1
             
             # Perform some agent-specific operations on each episode.

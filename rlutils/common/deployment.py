@@ -9,8 +9,8 @@ from tqdm import tqdm
 P_DEFAULT = {"num_episodes": 1, "render_freq": 1}
 
 
-def train(agent, P=P_DEFAULT, renderer=None, observer=None):
-    return deploy(agent, P, True, renderer, observer)
+def train(agent, P=P_DEFAULT, renderer=None, observer=None, run_id=None, save_dir="agents"):
+    return deploy(agent, P, True, renderer, observer, run_id, save_dir)
 
 def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id=None, save_dir="agents"):
 
@@ -100,13 +100,14 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                                 next_state, done)
 
                 # Update tracking variables.
-                reward_sum += np.float64(reward).sum()
                 if t == 0: 
-                    if ep == 0: track_components = "reward_components" in info
-                    if track_components: reward_components_sum = np.array(info["reward_components"])
-                elif track_components:   reward_components_sum += info["reward_components"]
+                    # NOTE: Use info for extrinsic, extra for intrinsic.
+                    if ep == 0: track_components = "reward_components" in extra
+                    if track_components: reward_components_sum = np.array(extra["reward_components"])
+                elif track_components:   reward_components_sum += extra["reward_components"]
+                reward_sum += (sum(extra["reward_components"]) if "reward_components" in extra else np.float64(reward).sum()) 
                 state = next_state; t += 1
-            
+                    
             # Perform some agent-specific operations on each episode.
             if train: results = agent.per_episode()    
             elif hasattr(agent, "per_episode_deploy"): results = agent.per_episode_deploy()    

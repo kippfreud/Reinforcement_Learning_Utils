@@ -16,9 +16,13 @@ class HrRewardsAndCosts:
     @property
     def d(self): return self.subsets.shape[2]
 
+    def __str__(self): return f"- Subsets:\n{self.subsets.numpy()}\n- Weights: {self.weights.numpy()}"
+    
+    def __call__(self, states, actions): return self.phi(states, actions)*self.weights
+
     def phi(self, states, _):
         """
         Map a batch of state-action pairs to vectors in {0,1}^m, indicating occupancy.
         NOTE: Currently only uses states!
         """
-        return (((states[:,None,:] < self.subsets[:,:,:,0]) | (states[:,None,:] > self.subsets[:,:,:,1])).sum(axis=1) == 0).type(torch.float32)
+        return (((states[:,None,:] < self.subsets[:,:,:,0]) | (states[:,None,:] > self.subsets[:,:,:,1])).sum(axis=2) == 0).type(torch.float32)

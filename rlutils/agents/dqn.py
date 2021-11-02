@@ -52,7 +52,7 @@ class DqnAgent(Agent):
         if do_extra:
             extra = {"pi": action_probs.cpu().detach().numpy()[0], "Q": Q.cpu().detach().numpy()}
             if self.P["reward_components"] is not None and self.reward is not None: 
-                extra["reward_components"] = (self.reward.phi(state, action)*self.reward.weights).cpu().detach().numpy()
+                extra["reward_components"] = (self.reward(state, action))[0].cpu().detach().numpy()
         else: extra = {}
         return action.item(), extra
 
@@ -63,12 +63,12 @@ class DqnAgent(Agent):
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
         states = torch.cat(batch.state)
         actions = torch.cat(batch.action)
-        rewards = torch.cat(batch.reward)
+        if self.reward is None: rewards = torch.cat(batch.reward)
         nonterminal_mask = ~torch.cat(batch.done)
         nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
         # Use target network to compute Q_target(s', a') for each nonterminal next state.
         next_Q_values = torch.zeros((self.P["batch_size"], 1 if self.P["reward_components"] is None else self.P["reward_components"]), device=self.device)
-        Q_t_n = self.Q_target(nonterminal_next_states)
+        Q_t_n = self.Q_target(nonterminal_next_states).detach()
         if self.P["reward_components"] is None: 
             # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
             Q_values = self.Q(states).gather(1, actions.reshape(-1,1))
@@ -92,6 +92,12 @@ class DqnAgent(Agent):
             # NOTE: This creates a regular Bellman update. Disabling it prioritising learning all successor features equally.
             if True: Q_values *= self.reward.weights; Q_targets *= self.reward.weights 
         loss = F.smooth_l1_loss(Q_values, Q_targets)
+
+        if False:
+            from torchviz import make_dot
+            make_dot(loss).render("test", format="svg")
+            raise Exception()
+
         self.Q.optimise(loss)
         if self.P["target_update"][0] == "hard":
             # Perform periodic hard update on target.

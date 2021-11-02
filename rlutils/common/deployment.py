@@ -6,6 +6,9 @@ import numpy as np
 from tqdm import tqdm
 
 
+# TODO: Repeated calls with persistent run_id causes Monitor wrapper to be re-applied! Unwrap on agent.env.close()?
+
+
 P_DEFAULT = {"num_episodes": 1, "render_freq": 1}
 
 
@@ -75,7 +78,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             else: state = torch.from_numpy(state).float().to(agent.device).unsqueeze(0)
 
             # NOTE: running observer.per_episode() *before* episode, as needed for PbRL project.
-            observer_logs = observer.per_episode() if observe_this_ep and hasattr(observer, "per_episode") else {}
+            observer_logs = observer.per_episode(ep) if observe_this_ep and hasattr(observer, "per_episode") else {}
             
             # Iterate through timesteps.
             while not done:

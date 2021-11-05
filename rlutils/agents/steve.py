@@ -1,10 +1,3 @@
-"""
-Stochastic ensemble value expansion (STEVE). From:
-    "Sample-Efficient Reinforcement Learning with Stochastic Ensemble Value Expansion"
-NOTE: Currently requires reward function to be provided rather than learned.
-NOTE: The model is also set up to predict state *derivatives*, unlike in the original paper. 
-"""
-
 from .ddpg import DdpgAgent # STEVE inherits from DDPG.
 from ._default_hyperparameters import default_hyperparameters
 from ..common.networks import SequentialNetwork
@@ -17,7 +10,13 @@ import torch.nn.functional as F
 
 class SteveAgent(DdpgAgent):
     def __init__(self, env, hyperparameters):
-        assert "reward_function" in hyperparameters, "Need to provide reward function."
+        """
+        Stochastic ensemble value expansion (STEVE). From:
+            "Sample-Efficient Reinforcement Learning with Stochastic Ensemble Value Expansion"
+        NOTE: Currently requires reward function to be provided rather than learned.
+        NOTE: The model is also set up to predict state *derivatives*, unlike in the original paper. 
+        """
+        assert "reward" in hyperparameters, f"{type(self).__name__} requires a reward function."
         # Overwrite default hyperparameters for DDPG.
         P = default_hyperparameters["ddpg"]
         for k, v in default_hyperparameters["steve"]["ddpg_parameters"].items(): P[k] = v
@@ -32,8 +31,8 @@ class SteveAgent(DdpgAgent):
         else: self.state_dim, action_dim = self.env.observation_space.shape[0], self.env.action_space.shape[0]        
         self.models = [SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim, lr=self.P["lr_model"]).to(self.device) for _ in range(self.P["num_models"])]
         # Parameters for action scaling.
-        self.act_k = (self.env.action_space.high - self.env.action_space.low) / 2.
-        self.act_b = (self.env.action_space.high + self.env.action_space.low) / 2.
+        self.act_k = torch.tensor((self.env.action_space.high - self.env.action_space.low) / 2.)
+        self.act_b = torch.tensor((self.env.action_space.high + self.env.action_space.low) / 2.)
         # Small float used to prevent div/0 errors.
         self.eps = np.finfo(np.float32).eps.item() 
         # Tracking variables.
@@ -58,34 +57,23 @@ class SteveAgent(DdpgAgent):
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model, pi and Q network parameters."""
-
         # TODO: Batch normalisation of state dimensions.
-
-        if len(self.memory) < self.P["batch_size"]: return
         if self.total_t % self.P["model_freq"] == 0:
             # Optimise each model on a different batch.
             for model in self.models:
-                # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
-                batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-                states = torch.cat(batch.state)
-                actions = torch.cat(batch.action)
-                next_states = torch.cat(batch.next_state)
-                # Update model in the direction of the true change in state using MSE loss.
+                states, actions, _, _, next_states = self.memory.sample(self.P["batch_size"], keep_terminal_next=True)
+                if states is None: return 
+                # Update model in the direction of the true state derivatives using MSE loss.
                 states_and_actions = col_concat(states, actions)
                 target = next_states - states_and_actions[:,:self.state_dim]
                 prediction = model(states_and_actions)
                 loss = F.mse_loss(prediction, target)
                 model.optimise(loss)
                 self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusion of DDPG methods.
-        
         # TODO: Handle termination via nonterminal_mask.
-        
         # Sample another batch, this time for training pi and Q.
-        batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-        states = torch.cat(batch.state)
-        actions = torch.cat(batch.action)
-        rewards = torch.cat(batch.reward).reshape(-1,1)
-        next_states = torch.cat(batch.next_state)
+        states, actions, rewards, _, next_states = self.memory.sample(self.P["batch_size"], keep_terminal_next=True)
+        rewards = rewards.reshape(-1,1) # NOTE: Sampling rewards shouldn't be necessary if have intrinsic reward function.        
         # Use models to build (hopefully) better Q_targets by simulating forward dynamics.
         Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.Q_target)))
         with torch.no_grad(): 
@@ -96,17 +84,19 @@ class SteveAgent(DdpgAgent):
                 Q_targets[:,0,:,j] = (rewards + self.P["gamma"] * target_net(col_concat(next_states, next_actions))).expand(self.P["batch_size"], self.P["num_models"])
             for i, model in enumerate(self.models):  
                 # Run a forward simulation for each model. 
-                sim_states, sim_actions, g = next_states, next_actions, 0      
+                sim_states, sim_actions, sim_returns = next_states, next_actions, 0      
                 for h in range(1, self.P["horizon"]+1): 
                     # Use reward function to get reward for simulated state-action pair and add to cumulative return.
-                    sim_rewards = [self.P["reward_function"](s, self._action_scale(a)) for s, a in zip(sim_states, sim_actions)]
-                    g += (self.P["gamma"] ** h) * torch.Tensor(sim_rewards).reshape(-1, 1)
+                    # sim_rewards = [self.P["reward"](s, self._action_scale(a)) for s, a in zip(sim_states, sim_actions)]
+                    sim_rewards = self.P["reward"](sim_states, self._action_scale(sim_actions))
+                    assert sim_rewards.shape == (self.P["batch_size"], 1)
+                    sim_returns += (self.P["gamma"] ** h) * sim_rewards
                     # Use model and target pi network to advance states and actions.
                     sim_states += model(col_concat(sim_states, sim_actions)) # Model predicts derivatives.
                     sim_actions = self.pi_target(sim_states)
                     # Store Q_targets for this horizon.
                     for j, target_net in enumerate(self.Q_target): 
-                        Q_targets[:,h,i,j] = (g + ((self.P["gamma"] ** (h+1)) * target_net(col_concat(sim_states, sim_actions)))).squeeze()
+                        Q_targets[:,h,i,j] = (sim_returns + ((self.P["gamma"] ** (h+1)) * target_net(col_concat(sim_states, sim_actions)))).squeeze()
         # Inverse variance weighting of horizons. 
         var = Q_targets.var(dim=(2, 3)) + self.eps # Prevent div/0 error.
         inverse_var = 1 / var
@@ -132,6 +122,6 @@ class SteveAgent(DdpgAgent):
         del self.ep_losses_model[:]; del self.ep_model_usage[:]
         return out
 
-    def _action_scale(self, action):
-        """Rescale action from [-1,1] to action space extents."""
-        return self.act_k * action.numpy() + self.act_b
+    def _action_scale(self, actions):
+        """Rescale actions from [-1,1] to action space extents."""
+        return (self.act_k * actions) + self.act_b

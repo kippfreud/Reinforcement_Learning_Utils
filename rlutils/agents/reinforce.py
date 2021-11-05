@@ -1,7 +1,3 @@
-"""
-DESCRIPTION
-"""
-
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 
@@ -13,6 +9,9 @@ import torch.nn.functional as F
 
 class ReinforceAgent(Agent):
     def __init__(self, env, hyperparameters):
+        """
+        DESCRIPTION
+        """
         Agent.__init__(self, env, hyperparameters)
         # Create pi network (and V if using advantage baselining).
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()

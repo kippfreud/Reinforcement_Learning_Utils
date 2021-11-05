@@ -1,12 +1,11 @@
-"""
-DESCRIPTION
-"""
-
 from ._generic import Agent
 
 
 class RandomAgent(Agent):
     def __init__(self, env, hyperparameters):
+        """
+        An agent that samples actions uniform-randomly (with optional inertia) from the action space.
+        """
         Agent.__init__(self, env, hyperparameters)
         self.a_last = self.env.action_space.sample()
 

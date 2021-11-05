@@ -4,7 +4,7 @@ import numpy as np
 
 def col_concat(x, y):
     """Concatenate x and y along the second (column) dimension."""
-    return torch.cat([x, y], 1).float()
+    return torch.cat([x, y], dim=1).float()
 
 def one_hot(idx, len, device):
     """Create a tensor of length len which is one-hot at idx."""

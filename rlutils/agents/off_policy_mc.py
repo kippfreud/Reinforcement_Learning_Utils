@@ -1,7 +1,3 @@
-"""
-DESCRIPTION
-"""
-
 from ._generic import Agent
 
 import numpy as np
@@ -9,6 +5,9 @@ import numpy as np
 
 class OffPolicyMCAgent(Agent):
     def __init__(self, env, hyperparameters): 
+        """
+        DESCRIPTION
+        """
         Agent.__init__(self, env, hyperparameters)
         self.action_shape = self.env.action_space.shape[:-1]
         self.Q = np.zeros(tuple(list(self.env.observation_space.shape) + list(self.action_shape)))

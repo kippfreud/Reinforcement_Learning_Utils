@@ -30,7 +30,8 @@ default_hyperparameters = {
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
     "tau": 0.005, # Parameter for Polyak averaging of target network parameters.
-    "noise_params": ("ou", 0., 0.15, 0.3, 0.3, 1000), # mu, theta, initial sigma, final sigma, decay period (episodes).
+    "noise_params": ("ou", 0., 0.15, 0.3, 0.3, 1000), # mu, theta, sigma_start, sigma_end, decay period (episodes).
+    # "noise_params": ("un", 1, 0, 1000), # sigma_start, sigma_end, decay_period (episodes).
     "td3": False, # Whether or not to enable the TD3 enhancements. 
     # --- If TD3 enabled ---
     "td3_noise_std": 0.2,
@@ -46,8 +47,9 @@ default_hyperparameters = {
     "gamma": 0.99, # Discount factor.
     "epsilon_start": 0.9,
     "epsilon_end": 0.05,
-    "epsilon_decay": 500000,
-    "target_update": ("soft", 0.0005), # Either ("hard", freq) or ("soft", tau).
+    "epsilon_decay": 500000, # Decay period (timesteps).
+    "target_update": ("soft", 0.0005), # Either ("hard", decay_period) or ("soft", tau).
+    # "target_update": ("hard", 10000),
     "double": True, # Whether to enable double DQN variant to reduce overestimation bias.
     "reward_components": None # For reward decomposition (set to None to disable).
   },
@@ -126,6 +128,21 @@ default_hyperparameters = {
     "lr_model": 1e-3, # Learning rate for dynamics model.
     "horizon": 5, # Maximum number of model steps to run to produce Q values.
     "ddpg_parameters": {"td3": True} # STEVE is built around DDPG, and needs multiple Q_target networks.
-  }
+  },
+
+  "treeqn": {
+    "net_node": [(None, 32), "R", (32, None)], 
+    "replay_capacity": 10000, # Size of replay buffer (starts overwriting when full).
+    "batch_size": 128, # Size of batches to sample from replay buffer during learning.
+    "lr_Q": 1e-3, # Learning rate for state-action value function.
+    "gamma": 0.99, # Discount factor.
+    "epsilon_start": 0.9,
+    "epsilon_end": 0.05,
+    "epsilon_decay": 500000,
+    "target_update": ("soft", 0.0005), # Either ("hard", decay_period) or ("soft", tau).
+    # "target_update": ("hard", 10000),
+    "double": True, # Whether to enable double DQN variant to reduce overestimation bias.
+    "reward_components": None # For reward decomposition (set to None to disable).
+  },
 
 }

@@ -1,12 +1,7 @@
-"""
-Simple model-based agent for discrete and continuous action spaces.
-Adapted from the model-based component of the architecture from:
-    "Neural Network Dynamics for Model-Based Deep Reinforcement Learning with Model-Free Fine-Tuning"
-"""
-
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
+from ..common.utils import col_concat
 
 import numpy as np
 import torch
@@ -15,7 +10,13 @@ import torch.nn.functional as F
 
 class SimpleModelBasedAgent(Agent):
     def __init__(self, env, hyperparameters):
-        assert "reward_function" in hyperparameters, "Need to provide reward function."
+        """
+        Simple model-based agent for both discrete and continuous action spaces.
+        Adapted from the model-based component of the architecture from:
+            "Neural Network Dynamics for Model-Based Deep Reinforcement Learning with Model-Free Fine-Tuning"
+        TODO: With discrete actions, better to have per-action output nodes rather than providing action integer as an input.
+        """
+        assert "reward" in hyperparameters, f"{type(self).__name__} requires a reward function."
         Agent.__init__(self, env, hyperparameters)
         # Establish whether action space is continuous or discrete.
         self.continuous_actions = len(self.env.action_space.shape) > 0
@@ -35,48 +36,45 @@ class SimpleModelBasedAgent(Agent):
 
     def act(self, state, explore=True, do_extra=False):
         """Either random or model-based action selection."""
-        extra = {}
-        if self.random_mode: action = self.env.action_space.sample()
-        else: 
-            returns, first_actions = self._model_rollout(state)
-            best_rollout = np.argmax(returns)
-            action = first_actions[best_rollout]
-            if do_extra: extra["g_pred"] = returns[best_rollout]
-        if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].numpy()
-        return action, extra
+        with torch.no_grad():
+            extra = {}
+            if self.random_mode: action = torch.tensor([self.env.action_space.sample()])
+            else: 
+                returns, first_actions = self.rollout(state)
+                best_rollout = np.argmax(returns)
+                action = first_actions[best_rollout]
+                if do_extra: extra["g_pred"] = returns[best_rollout]
+            if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].numpy()
+            return action[0].numpy() if self.continuous_actions else action.item(), extra
 
-    def predict(self, state, action):
+    def predict(self, states, actions):
         """Use model to predict the next state given a single state-action pair."""
-        return state + self.model(torch.cat((state[0], torch.Tensor(action if self.continuous_actions else [action]).to(self.device))).to(self.device)).detach()
+        return states + self.model(col_concat(states, actions.unsqueeze(1) if len(actions.shape) == 1 else actions))
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model network parameters."""
-
         # TODO: Batch normalisation of state dimensions.
-
         if self.random_mode: # During random mode, just sample from random memory.   
-            if len(self.random_memory) < self.P["batch_size"]: return 
-            batch = self.random_memory.sample(self.P["batch_size"])
+            states, actions, _, _, next_states = self.random_memory.sample(self.P["batch_size"], keep_terminal_next=True)
+            if states is None: return 
         else: # After random mode, sample from both memories according to self.batch_split.
-            if len(self.memory) < self.batch_split[0]: return 
-            batch = list(self.memory.sample(self.batch_split[0])) + list(self.random_memory.sample(self.batch_split[1]))
-        # Update model in the direction of the true change in state using MSE loss.
-        states_and_actions = torch.cat(tuple(torch.cat((x.state, torch.Tensor([x.action]).to(self.device)), dim=-1) for x in batch), dim=0).to(self.device)
-        next_states = torch.cat(tuple(x.next_state for x in batch)).to(self.device)
-        target = next_states - states_and_actions[:,:self.state_dim]
-        prediction = self.model(states_and_actions)
-        loss = F.mse_loss(prediction, target)
+            states, actions, _, _, next_states = self.memory.sample(self.batch_split[0], keep_terminal_next=True)
+            if states is None: return 
+            states_r, actions_r, _, _, next_states_r = self.random_memory.sample(self.batch_split[1], keep_terminal_next=True)
+            assert states_r is not None, "Random mode not long enough!"
+            states = torch.cat((states, states_r), dim=0)
+            actions = torch.cat((actions, actions_r), dim=0)
+            next_states = torch.cat((next_states, next_states_r), dim=0)        
+        # Update model in the direction of the true state derivatives using MSE loss.
+        loss = F.mse_loss(self.predict(states, actions), next_states)
         self.model.optimise(loss)
         return loss.item()
 
     def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
-        state = state.to(self.device)
-        reward = torch.tensor([reward]).float().to(self.device)
         if not self.P["random_mode_only"] and self.random_mode and len(self.random_memory) >= self.P["num_random_steps"]: 
             self.random_mode = False
             print("Random data collection complete.")
-        if not self.continuous_actions: action = [action]
         if self.random_mode: self.random_memory.add(state, action, reward, next_state, done)
         else: self.memory.add(state, action, reward, next_state, done)
         if self.total_t % self.P["model_freq"] == 0:
@@ -91,16 +89,16 @@ class SimpleModelBasedAgent(Agent):
         del self.ep_losses[:]
         return {"logs":{"model_loss": mean_loss, "random_mode": int(self.random_mode)}}
 
-    def _model_rollout(self, state): 
+    def rollout(self, state): 
         """Use model and reward function to generate and evaluate rollouts with random action selection.
         Then select the first action from the rollout with maximum return."""
         returns = []; first_actions = []
         for _ in range(self.P["num_rollouts"]):
             rollout_state, rollout_return = state.detach().clone().to(self.device), 0
             for t in range(self.P["rollout_horizon"]):
-                rollout_action = self.env.action_space.sample() # Random action selection.
+                rollout_action = torch.tensor([self.env.action_space.sample()]) # Random action selection.
                 if t == 0: first_actions.append(rollout_action)       
                 rollout_state = self.predict(rollout_state, rollout_action)
-                rollout_return += (self.P["gamma"] ** t) * self.P["reward_function"](rollout_state[0], rollout_action)                
+                rollout_return += (self.P["gamma"] ** t) * self.P["reward"](rollout_state, rollout_action)           
             returns.append(rollout_return)
         return returns, first_actions    

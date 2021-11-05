@@ -27,6 +27,7 @@ def make(agent, env, hyperparameters=dict()):
     elif agent == "simple_model_based": from ..agents.simple_model_based import SimpleModelBasedAgent as agent_class
     elif agent == "stable_baselines":   from ..agents.stable_baselines import StableBaselinesAgent as agent_class
     elif agent == "steve":              from ..agents.steve import SteveAgent as agent_class
+    elif agent == "treeqn":             from ..agents.treeqn import TreeqnAgent as agent_class
     return agent_class(env, P)
 
 def load(path, env): agent = torch_load(path); agent.env = env; return agent

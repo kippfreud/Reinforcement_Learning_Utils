@@ -30,12 +30,21 @@ class SequentialNetwork(nn.Module):
     def forward(self, x): return self.layers(x)
 
     def optimise(self, loss, do_backward=True, retain_graph=True): 
+        assert self.training, "Network is in eval_only mode."
         if do_backward: 
             self.optimiser.zero_grad()
             loss.backward(retain_graph=retain_graph) 
         if self.clip_grads: # Optional gradient clipping.
             for param in self.parameters(): param.grad.data.clamp_(-1, 1) 
         self.optimiser.step()
+
+    def polyak(self, other, tau):
+        """
+        Use Polyak averaging to blend parameters with those of another network.
+        """
+        for self_param, other_param in zip(self.parameters(), other.parameters()):
+            self_param.data.copy_((other_param.data * tau) + (self_param.data * (1.0 - tau)))
+
 
 def code_parser(code, input_shape, output_size):
     layers = []
@@ -58,18 +67,19 @@ def code_parser(code, input_shape, output_size):
 
 
 class TreeNetwork(nn.Module):
-    def __init__(self, input_shape):
+    def __init__(self, code, input_shape, num_actions,
+                 eval_only=False, optimiser=optim.Adam, lr=1e-3):
         super(TreeNetwork, self).__init__() 
-        self.node_spec = {
-            "code": [(None, 32), "R", (32, None), "S"],
-            "input_shape": input_shape, 
-            "output_size": 2, # Branching factor.
-            "lr": 5e-4
-            }
-        self.root = Node(**self.node_spec)
-    
+        assert type(code[-1][0]) == int and code[-1][1] is None, "Must have linear final layer."
+        self.code, self.input_shape, self.num_actions, self.eval_only, self.optimiser, self.lr = code, input_shape, num_actions, eval_only, optimiser, lr
+        self.root = self.node() # Leaf()
+        self.horizon = SequentialNetwork(code=self.code, input_shape=self.input_shape, output_size=self.num_actions,
+                                         eval_only=self.eval_only, optimiser=self.optimiser, lr=self.lr) 
+
     def __call__(self, x): 
-        return self.root(x).tensor()
+        if len(x.shape) == 1: x = x[None,:] # Handle single inputs.
+        h = self.horizon(x)[:,:,None]
+        return h if type(self.root) == Leaf else self.root(x).tensor() * h 
 
     @property
     def m(self): 
@@ -77,58 +87,89 @@ class TreeNetwork(nn.Module):
             return 1 if node.left is None else _recurse(node.left) + _recurse(node.right)
         return _recurse(self.root)
 
+    def state_dict(self): return (self.horizon.state_dict(), self.root.gsd())
+    def load_state_dict(self, d): self.horizon.load_state_dict(d[0]); self.root.lsd(d[1])
+
+    def polyak(self, other, tau): 
+        def _recurse(node, other_node): 
+            if node.left is not None: 
+                node.net.polyak(other_node.net, tau)
+                _recurse(node.left, other_node.left); _recurse(node.right, other_node.right)
+        _recurse(self.root, other.root)
+        self.horizon.polyak(other.horizon, tau)
+
+    def node(self):
+        # Multiply output by branching factor.
+        return Node(code=self.code, input_shape=self.input_shape, output_size=2*self.num_actions, 
+                    eval_only=self.eval_only, optimiser=self.optimiser, lr=self.lr) 
+
     def optimise(self, loss, **kwargs):
         self.zero_grad()
         loss.backward()
         self.root.optimise(loss, **kwargs)
+        self.horizon.optimise(loss, do_backward=False)
+
+    def zero_grad(self):
+        def _recurse(node): 
+            if node.left is not None: node.net.zero_grad(); _recurse(node.left); _recurse(node.right)
+        _recurse(self.root)
+        self.horizon.zero_grad()
+
 
 class Node:
-    def __init__(self, **spec): 
-        self.net = SequentialNetwork(**spec)
-        self.left, self.right = Empty(), Empty()
+    def __init__(self, **net_params): 
+        self.net = SequentialNetwork(**net_params)
+        self.left, self.right = Leaf(), Leaf()
     
     def __call__(self, x): 
-        P_l, P_r = self.net(x).T
-        return Output(((P_l, self.left(x)), (P_r, self.right(x))))
+        # NOTE: Apply reshape and softmax here to get probabilities.
+        P = nn.functional.softmax(self.net(x).reshape(x.shape[0], -1, 2), dim=2)
+        return Output((P, self.left(x), self.right(x)))
+
+    # Get and load state dicts.
+    def gsd(self): return (self.net.state_dict(), self.left.gsd(), self.right.gsd())
+    def lsd(self, d): self.net.load_state_dict(d[0]); self.left.lsd(d[1]); self.right.lsd(d[2]) 
 
     def optimise(self, loss, **kwargs):
         self.net.optimise(loss, do_backward=False, **kwargs)
         self.left.optimise(loss, **kwargs)
         self.right.optimise(loss, **kwargs)
 
-class Empty:
-    def __call__(self, x): 
-        return None
-    
-    def optimise(self, _): pass
 
-    # Prevent setting left and right before turning into a proper node.
+class Leaf:
+    def __call__(_, __): return None
+    def gsd(_): return None
+    def lsd(_, __): pass
+    def optimise(_, __): pass
+
+    # This prevents setting left and right before turning into an internal node.
     @property
     def left(_): return None
     @property
     def right(_): return None 
 
+
 class Output:
     def __init__(self, tup): 
         self._tuple = tup
 
-    def __str__(self, indent=0): return self._print(indent)
+    def __str__(self): return self._print()
 
-    def _print(self, indent):
+    def _print(self, indent=0):
         tab = "    "
-        (P_l, op_l), (P_r, op_r) = self._tuple
-        return str(P_l.detach().numpy()) + "\n" \
-            + ((tab * (indent+1)) + op_l._print(indent+1) if op_l is not None else "") \
-            + (tab * indent) + str(P_r.detach().numpy()) + "\n" \
-            + ((tab * (indent+1)) + op_r._print(indent+1) if op_r is not None else "") \
+        P, subtree_l, subtree_r = self._tuple
+        return str(P[:,:,0].detach().numpy().tolist()) + "\n" \
+            + ((tab * (indent+1)) + subtree_l._print(indent+1) if subtree_l is not None else "") \
+            + (tab * indent) + str(P[:,:,1].detach().numpy().tolist()) + "\n" \
+            + ((tab * (indent+1)) + subtree_r._print(indent+1) if subtree_r is not None else "") \
 
     def tensor(self):
-        (P_l, op_l), (P_r, op_r) = self._tuple
-        Ps_l, Ps_r = P_l[:,None], P_r[:,None] 
-        if op_l is not None: Ps_l = Ps_l * op_l.tensor()
-        if op_r is not None: Ps_r = Ps_r * op_r.tensor()
-        tensor = torch.cat([Ps_l, Ps_r], dim=1)
-        assert torch.isclose(tensor.sum(axis=1), torch.tensor(1.)).all()
+        P, subtree_l, subtree_r = self._tuple
+        Ps_l, Ps_r = P[:,:,0:1], P[:,:,1:2] # "One-element slice" to keep dims. 
+        if subtree_l is not None: Ps_l = Ps_l * subtree_l.tensor()
+        if subtree_r is not None: Ps_r = Ps_r * subtree_r.tensor()
+        tensor = torch.cat([Ps_l, Ps_r], dim=2)
+        assert torch.isclose(tensor.sum(axis=2), torch.tensor(1.)).all()
         return tensor
 
 

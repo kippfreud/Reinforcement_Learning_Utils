@@ -1,7 +1,3 @@
-"""
-Diversity Is All You Need (DIAYN).
-"""
-
 from .sac import SacAgent # DIAYN inherits from SAC.
 from ._default_hyperparameters import default_hyperparameters
 from ..common.networks import SequentialNetwork
@@ -14,6 +10,9 @@ import torch.nn.functional as F
 
 class DiaynAgent(SacAgent):
     def __init__(self, env, hyperparameters):
+        """
+        Diversity Is All You Need (DIAYN).
+        """
         # Overwrite default hyperparameters for SAC.
         P = default_hyperparameters["sac"]
         for k, v in default_hyperparameters["diayn"]["sac_parameters"].items(): P[k] = v
@@ -47,11 +46,10 @@ class DiaynAgent(SacAgent):
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the discriminator, pi and Q network parameters."""
-        if len(self.memory) < self.P["batch_size"]: return
-        # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
-        batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-        features, zs = torch.split(torch.cat(batch.state), [self.state_dim, self.P["num_skills"]], dim=1)
-        if self.P["include_actions"]: features = col_concat(features, torch.cat(batch.action))
+        batch = self.memory.sample(self.P["batch_size"]); states, actions = batch[:2] # Only use states and actions here.
+        if states is None: return 
+        features, zs = torch.split(states, [self.state_dim, self.P["num_skills"]], dim=1)
+        if self.P["include_actions"]: features = col_concat(features, actions)
         # Update discriminator to minimise cross-entropy loss against skills.
         loss = F.cross_entropy(self.discriminator(features), zs.argmax(1))   
         self.discriminator.optimise(loss)

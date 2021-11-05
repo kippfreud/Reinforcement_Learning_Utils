@@ -1,9 +1,3 @@
-"""
-DESCRIPTION
-
-TODO: Make TD3 inherit from DDPG, rather than complicating this class with if statements.
-"""
-
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
@@ -17,6 +11,11 @@ import torch.nn.functional as F
 
 class DdpgAgent(Agent):
     def __init__(self, env, hyperparameters):
+        """
+        DESCRIPTION
+
+        TODO: Make TD3 inherit from DDPG, rather than complicating this class with if statements.
+        """
         Agent.__init__(self, env, hyperparameters)
         # Create pi and Q networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
@@ -33,8 +32,8 @@ class DdpgAgent(Agent):
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Create noise process for exploration.
-        if self.P["noise_params"][0] == "ou": self.noise = OUNoise(self.env.action_space, *self.P["noise_params"][1:])
-        elif self.P["noise_params"][0] == "un": self.noise = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
+        if self.P["noise_params"][0] == "ou": self.exploration = OUNoise(self.env.action_space, *self.P["noise_params"][1:])
+        elif self.P["noise_params"][0] == "un": self.exploration = UniformNoise(self.env.action_space, *self.P["noise_params"][1:])
         else: raise Exception()
         # Tracking variables.   
         self.total_ep = 0 # Used for noise decay.
@@ -44,7 +43,7 @@ class DdpgAgent(Agent):
     def act(self, state, explore=True, do_extra=False):
         """Deterministic action selection plus additive noise."""
         action_greedy = self.pi(state).cpu().detach().numpy()[0]
-        action = self.noise.get_action(action_greedy) if explore else action_greedy
+        action = self.exploration(action_greedy) if explore else action_greedy
         if do_extra:
             sa = col_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
             sa_greedy = col_concat(state, torch.tensor([action_greedy], device=self.device, dtype=torch.float)) if explore else sa
@@ -57,15 +56,9 @@ class DdpgAgent(Agent):
     def update_on_batch(self, states=None, actions=None, Q_targets=None):
         """Use a random batch from the replay memory to update the pi and Q network parameters.
         NOTE: If the STEVE algorithm is wrapped around DDPG, states, actions and Q_targets will be given."""
-        if states is None:
-            if len(self.memory) < self.P["batch_size"]: return
-            # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
-            batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-            states = torch.cat(batch.state)
-            actions = torch.cat(batch.action)
-            rewards = torch.cat(batch.reward)
-            nonterminal_mask = ~torch.cat(batch.done)
-            nonterminal_next_states = torch.cat(batch.next_state)[nonterminal_mask]
+        if states is None:         
+            states, actions, rewards, nonterminal_mask, nonterminal_next_states = self.memory.sample(self.P["batch_size"])
+            if states is None: return 
             # Select a' using the target pi network.
             nonterminal_next_actions = self.pi_target(nonterminal_next_states)
             if self.P["td3"]:
@@ -92,18 +85,12 @@ class DdpgAgent(Agent):
             self.pi.optimise(policy_loss)
             policy_loss = policy_loss.item()
         # Perform soft (Polyak) updates on targets.
-        for net, target in zip([self.pi]+self.Q, [self.pi_target]+self.Q_target):
-            for param, target_param in zip(net.parameters(), target.parameters()):
-                target_param.data.copy_(param.data * self.P["tau"] + target_param.data * (1.0 - self.P["tau"]))
+        for net, target in zip([self.pi]+self.Q, [self.pi_target]+self.Q_target): target.polyak(net, tau=self.P["tau"])
         return policy_loss, value_loss_sum
 
     def per_timestep(self, state, action, reward, next_state, done, suppress_update=False):
         """Operations to perform on each timestep during training."""
-        self.memory.add(state, 
-                        torch.tensor([action], device=self.device, dtype=torch.float), 
-                        torch.tensor([reward], device=self.device, dtype=torch.float), 
-                        next_state, 
-                        torch.tensor([done], device=self.device, dtype=torch.bool))                
+        self.memory.add(state, action, reward, next_state, done)               
         if not suppress_update:
             losses = self.update_on_batch()
             if losses: self.ep_losses.append(losses)
@@ -114,5 +101,5 @@ class DdpgAgent(Agent):
         if self.ep_losses: mean_policy_loss, mean_value_loss = np.nanmean(self.ep_losses, axis=0)
         else: mean_policy_loss, mean_value_loss = 0., 0.
         del self.ep_losses[:]; self.total_ep += 1
-        self.noise.decay(self.total_ep)
-        return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.noise.sigma}}
+        self.exploration.decay(self.total_ep)
+        return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.exploration.sigma}}

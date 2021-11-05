@@ -1,7 +1,3 @@
-"""
-DESCRIPTION
-"""
-
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 
@@ -13,6 +9,9 @@ import torch.nn.functional as F
 
 class ActorCriticAgent(Agent):
     def __init__(self, env, hyperparameters):
+        """
+        DESCRIPTION
+        """
         Agent.__init__(self, env, hyperparameters)
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi and V networks.

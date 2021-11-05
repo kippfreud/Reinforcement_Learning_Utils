@@ -1,7 +1,3 @@
-"""
-DESCRIPTION
-"""
-
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import PpoMemory
@@ -14,6 +10,9 @@ import torch.nn.functional as F
 
 class PpoAgent(Agent):
     def __init__(self, env, hyperparameters):
+        """
+        DESCRIPTION
+        """
         Agent.__init__(self, env, hyperparameters)
         # Establish whether action space is continuous or discrete.
         self.continuous_actions = len(self.env.action_space.shape) > 0

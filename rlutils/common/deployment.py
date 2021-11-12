@@ -9,7 +9,7 @@ from tqdm import tqdm
 # TODO: Repeated calls with persistent run_id causes Monitor wrapper to be re-applied! Unwrap on agent.env.close()?
 
 
-P_DEFAULT = {"num_episodes": 1, "render_freq": 1}
+P_DEFAULT = {"num_episodes": int(1e6), "render_freq": 1}
 
 
 def train(agent, P=P_DEFAULT, renderer=None, observer=None, run_id=None, save_dir="agents"):

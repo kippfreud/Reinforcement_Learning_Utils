@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import torch.nn.functional as F 
-from torch.distributions.normal import Normal
+
+from .utils import reparameterise
 
 
 def squashed_gaussian(pi): 
@@ -9,9 +10,7 @@ def squashed_gaussian(pi):
     For continuous spaces. Interpret pi as the mean and log standard deviation of a Gaussian,
     then generate an action by sampling from that distribution and applying tanh squashing.
     """
-    mu, log_std = torch.split(pi, int(pi.shape[1]/2), dim=1)
-    log_std = torch.clamp(log_std, -20, 2)
-    gaussian = Normal(mu, torch.exp(log_std))
+    gaussian = reparameterise(pi)
     action_unsquashed = gaussian.rsample() # rsample() required to allow differentiation.
     action = torch.tanh(action_unsquashed)
     # Compute log_prob from Gaussian, then apply correction for tanh squashing.

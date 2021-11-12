@@ -8,7 +8,7 @@ element = namedtuple('element', ('state', 'action', 'reward', 'next_state', 'don
 
 class ReplayMemory:
     def __init__(self, capacity):
-        self.capacity = capacity
+        self.capacity = int(capacity)
         self.element = element
         self.memory = []
         self.position = 0

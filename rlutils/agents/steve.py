@@ -42,20 +42,21 @@ class SteveAgent(DdpgAgent):
 
     def act(self, state, explore=True, do_extra=False):
         """Either random or DDPG action selection."""
-        extra = {}
-        if self.random_mode: action = 2*np.random.rand(*self.env.action_space.shape) - 1 # Normalised in [-1,1].
-        else: action, extra = DdpgAgent.act(self, state, explore, do_extra)
-        if do_extra: extra["next_state_pred"] = self.predict(state, action).numpy()
-        return action, extra
+        with torch.no_grad():
+            extra = {}
+            if self.random_mode: action = torch.tensor([self.env.action_space.sample()])
+            else: action, extra = DdpgAgent.act(self, state, explore, do_extra)
+            if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].detach().numpy()
+            return action[0].numpy(), extra
 
-    def predict(self, state, action, mode="mean"):
-        """Use both models (mean) to predict the next state given a single state-action pair."""
-        sa = col_concat(state, torch.tensor([action], device=self.device, dtype=torch.float))
-        ds = torch.cat([model(sa).detach() for model in self.models])
-        if mode == "mean": return state[0] + ds.mean(axis=0)
-        elif mode == "all": return state[0] + ds
+    def predict(self, states, actions, mode="mean"):
+        """Use all models to predict the next state for an array of state-action pairs. Return either mean or all."""
+        sa = col_concat(states, actions)
+        ds = torch.cat([model(sa).unsqueeze(2) for model in self.models], dim=2)
+        if mode == "mean":  return states + ds.mean(axis=2)
+        elif mode == "all": return states + ds
 
-    def update_on_batch(self):
+    def update_on_batch(self, model_only=False):
         """Use a random batch from the replay memory to update the model, pi and Q network parameters."""
         # TODO: Batch normalisation of state dimensions.
         if self.total_t % self.P["model_freq"] == 0:
@@ -65,11 +66,10 @@ class SteveAgent(DdpgAgent):
                 if states is None: return 
                 # Update model in the direction of the true state derivatives using MSE loss.
                 states_and_actions = col_concat(states, actions)
-                target = next_states - states_and_actions[:,:self.state_dim]
-                prediction = model(states_and_actions)
-                loss = F.mse_loss(prediction, target)
+                loss = F.mse_loss(model(states_and_actions), next_states - states_and_actions[:,:self.state_dim])
                 model.optimise(loss)
-                self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusion of DDPG methods.
+                self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusing the DDPG methods.
+        if model_only: return self.ep_losses_model[-1]
         # TODO: Handle termination via nonterminal_mask.
         # Sample another batch, this time for training pi and Q.
         states, actions, rewards, _, next_states = self.memory.sample(self.P["batch_size"], keep_terminal_next=True)

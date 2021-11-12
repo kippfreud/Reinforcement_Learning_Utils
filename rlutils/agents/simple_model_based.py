@@ -1,7 +1,7 @@
 from ._generic import Agent
 from ..common.networks import SequentialNetwork
 from ..common.memory import ReplayMemory
-from ..common.utils import col_concat
+from ..common.utils import col_concat, reparameterise
 
 import numpy as np
 import torch
@@ -12,6 +12,7 @@ class SimpleModelBasedAgent(Agent):
     def __init__(self, env, hyperparameters):
         """
         Simple model-based agent for both discrete and continuous action spaces.
+        Optionally implements probabilistic dynamics using the reparameterisation trick.
         Adapted from the model-based component of the architecture from:
             "Neural Network Dynamics for Model-Based Deep Reinforcement Learning with Model-Free Fine-Tuning"
         TODO: With discrete actions, better to have per-action output nodes rather than providing action integer as an input.
@@ -21,9 +22,10 @@ class SimpleModelBasedAgent(Agent):
         # Establish whether action space is continuous or discrete.
         self.continuous_actions = len(self.env.action_space.shape) > 0
         # Create model network.
+        if self.P["probabilistic"]: raise NotImplementedError("Requires entropy regularisation")
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else: self.state_dim, action_dim = self.env.observation_space.shape[0], (self.env.action_space.shape[0] if self.continuous_actions else 1) 
-        self.model = SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim, lr=self.P["lr_model"]).to(self.device)
+        self.model = SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim*(2 if self.P["probabilistic"] else 1), lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for random transitions one for on-policy transitions.
         self.random_memory = ReplayMemory(self.P["num_random_steps"])
         if not self.P["random_mode_only"]:
@@ -48,8 +50,11 @@ class SimpleModelBasedAgent(Agent):
             return action[0].numpy() if self.continuous_actions else action.item(), extra
 
     def predict(self, states, actions):
-        """Use model to predict the next state given a single state-action pair."""
-        return states + self.model(col_concat(states, actions.unsqueeze(1) if len(actions.shape) == 1 else actions))
+        """Use model to predict the next state for an array of state-action pairs."""
+        pred = self.model(col_concat(states, actions.unsqueeze(1) if len(actions.shape) == 1 else actions))
+        # If using a probabilistic dynamics model, simply need to employ the reparameterisation trick.
+        if self.P["probabilistic"]: pred = reparameterise(pred).rsample() 
+        return states + pred
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model network parameters."""
@@ -77,10 +82,10 @@ class SimpleModelBasedAgent(Agent):
             print("Random data collection complete.")
         if self.random_mode: self.random_memory.add(state, action, reward, next_state, done)
         else: self.memory.add(state, action, reward, next_state, done)
-        if self.total_t % self.P["model_freq"] == 0:
+        self.total_t += 1
+        if self.P["model_freq"] > 0 and self.total_t % self.P["model_freq"] == 0:
             loss = self.update_on_batch()
             if loss: self.ep_losses.append(loss)
-        self.total_t += 1
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""

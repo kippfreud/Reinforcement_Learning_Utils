@@ -67,18 +67,19 @@ def code_parser(code, input_shape, output_size):
 
 
 class TreeNetwork(nn.Module):
-    def __init__(self, code, input_shape, num_actions,
+    def __init__(self, code_node, code_horizon, input_shape, num_actions,
                  eval_only=False, optimiser=optim.Adam, lr=1e-3):
         super(TreeNetwork, self).__init__() 
-        assert type(code[-1][0]) == int and code[-1][1] is None, "Must have linear final layer."
-        self.code, self.input_shape, self.num_actions, self.eval_only, self.optimiser, self.lr = code, input_shape, num_actions, eval_only, optimiser, lr
+        assert type(code_node[-1][0]) == int and code_node[-1][1] is None, "Node code have linear final layer."
+        # assert code_horizon[-1] == "R", "Horizon code have ReLU final layer."
+        self.code_node, self.code_horizon, self.input_shape, self.num_actions, self.eval_only, self.optimiser, self.lr = code_node, code_horizon, input_shape, num_actions, eval_only, optimiser, lr
         self.root = self.node() # Leaf()
-        self.horizon = SequentialNetwork(code=self.code, input_shape=self.input_shape, output_size=self.num_actions,
+        self.horizon = SequentialNetwork(code=self.code_horizon, input_shape=self.input_shape, output_size=self.num_actions,
                                          eval_only=self.eval_only, optimiser=self.optimiser, lr=self.lr) 
 
     def __call__(self, x): 
-        if len(x.shape) == 1: x = x[None,:] # Handle single inputs.
-        h = self.horizon(x)[:,:,None]
+        if len(x.shape) == 1: x = x.unsqueeze(0) # Handle single inputs.
+        h = self.horizon(x).unsqueeze(2)
         return h if type(self.root) == Leaf else self.root(x).tensor() * h 
 
     @property
@@ -99,8 +100,8 @@ class TreeNetwork(nn.Module):
         self.horizon.polyak(other.horizon, tau)
 
     def node(self):
-        # Multiply output by branching factor.
-        return Node(code=self.code, input_shape=self.input_shape, output_size=2*self.num_actions, 
+        # NOTE: For a branching factor of 2, nodes only require one output.
+        return Node(code=self.code_node, input_shape=self.input_shape, output_size=self.num_actions, 
                     eval_only=self.eval_only, optimiser=self.optimiser, lr=self.lr) 
 
     def optimise(self, loss, **kwargs):
@@ -108,6 +109,12 @@ class TreeNetwork(nn.Module):
         loss.backward()
         self.root.optimise(loss, **kwargs)
         self.horizon.optimise(loss, do_backward=False)
+
+    def optimise_dual_loss(self, loss_tree, loss_horizon, **kwargs):
+        self.zero_grad()
+        loss_tree.backward(); loss_horizon.backward()
+        self.root.optimise(loss_tree, **kwargs)
+        self.horizon.optimise(loss_horizon, do_backward=False)
 
     def zero_grad(self):
         def _recurse(node): 
@@ -122,9 +129,8 @@ class Node:
         self.left, self.right = Leaf(), Leaf()
     
     def __call__(self, x): 
-        # NOTE: Apply reshape and softmax here to get probabilities.
-        P = nn.functional.softmax(self.net(x).reshape(x.shape[0], -1, 2), dim=2)
-        return Output((P, self.left(x), self.right(x)))
+        # NOTE: Apply sigmoid here to squash output into [0,1].
+        return Output((torch.sigmoid(self.net(x)), self.left(x), self.right(x)))
 
     # Get and load state dicts.
     def gsd(self): return (self.net.state_dict(), self.left.gsd(), self.right.gsd())
@@ -157,15 +163,15 @@ class Output:
 
     def _print(self, indent=0):
         tab = "    "
-        P, subtree_l, subtree_r = self._tuple
-        return str(P[:,:,0].detach().numpy().tolist()) + "\n" \
+        P_r, subtree_l, subtree_r = self._tuple; P_r = P_r.detach().numpy()
+        return str((1 - P_r).tolist()) + "\n" \
             + ((tab * (indent+1)) + subtree_l._print(indent+1) if subtree_l is not None else "") \
-            + (tab * indent) + str(P[:,:,1].detach().numpy().tolist()) + "\n" \
+            + (tab * indent) + str(P_r.tolist()) + "\n" \
             + ((tab * (indent+1)) + subtree_r._print(indent+1) if subtree_r is not None else "") \
 
     def tensor(self):
-        P, subtree_l, subtree_r = self._tuple
-        Ps_l, Ps_r = P[:,:,0:1], P[:,:,1:2] # "One-element slice" to keep dims. 
+        P_r, subtree_l, subtree_r = self._tuple
+        Ps_l, Ps_r = (1 - P_r).unsqueeze(2), P_r.unsqueeze(2) # P_r interpreted as probability of *right* child.
         if subtree_l is not None: Ps_l = Ps_l * subtree_l.tensor()
         if subtree_r is not None: Ps_r = Ps_r * subtree_r.tensor()
         tensor = torch.cat([Ps_l, Ps_r], dim=2)

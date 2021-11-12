@@ -16,9 +16,9 @@ class TreeqnAgent(DqnAgent):
         assert "reward" in hyperparameters, f"{type(self).__name__} requires a reward function."
         Agent.__init__(self, env, hyperparameters) # NOTE: Use generic initialisation not DQN!
         # Create tree-structured decompositional Psi network.
-        net_code, input_shape, num_actions = self.P["net_node"], self.env.observation_space.shape[0], self.env.action_space.n
-        self.Psi = TreeNetwork(code=net_code, input_shape=input_shape, num_actions=num_actions, lr=self.P["lr_Q"]).to(self.device)
-        self.Psi_target = TreeNetwork(code=net_code, input_shape=input_shape, num_actions=num_actions, eval_only=True).to(self.device)
+        code_node, code_horizon, input_shape, num_actions = self.P["net_node"], self.P["net_horizon"], self.env.observation_space.shape[0], self.env.action_space.n
+        self.Psi = TreeNetwork(code_node, code_horizon, input_shape, num_actions, lr=self.P["lr_Q"]).to(self.device)
+        self.Psi_target = TreeNetwork(code_node, code_horizon, input_shape, num_actions, eval_only=True).to(self.device)
         self.Psi_target.load_state_dict(self.Psi.state_dict()) # Clone.
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
@@ -55,16 +55,24 @@ class TreeqnAgent(DqnAgent):
         next_Psi_values[nonterminal_mask] = Psi_t_n[torch.arange(Psi_t_n.shape[0]), nonterminal_next_actions, :]  
         # Compute target = phi + discounted Psi_target(s', a').
         Psi_targets = self.P["reward"].phi(states, actions) + (self.P["gamma"] * next_Psi_values)
-        # Update value in the direction of TD error using Huber loss. 
-        if False: 
-            # Regular Bellman update. 
+        
+        if True: 
+            # Update value in the direction of TD error using Huber loss. 
             loss = F.smooth_l1_loss(Psi_values * self.P["reward"].weights, Psi_targets * self.P["reward"].weights) 
-        else:   
+            self.Psi.optimise(loss)
+        elif False:   
             # Prioritise learning all successor features equally.
-            # loss = F.smooth_l1_loss(Psi_values, Psi_targets)
-            loss = F.mse_loss(Psi_values, Psi_targets)
-        self.Psi.optimise(loss)
-        # TODO: Pull this update into common.networks?
+            loss = F.smooth_l1_loss(Psi_values, Psi_targets)
+            self.Psi.optimise(loss)
+        elif False:
+            """Don't need Psi_values here; get horizon and tree outputs separately from self.Psi."""
+            # Tree: categorical cross-entropy with soft classes.
+            # https://discuss.pytorch.org/t/catrogircal-cross-entropy-with-soft-classes/50871/2
+            # loss_tree = 
+            # Horizon: mean squared error.
+            # loss_horizon = 
+            self.Psi.optimise_dual_loss(loss_tree, loss_horizon)
+       
         if self.P["target_update"][0] == "hard":
             # Perform periodic hard update on target.
             self.updates_since_target_clone += 1

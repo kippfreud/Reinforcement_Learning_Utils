@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 
 def col_concat(x, y):
@@ -11,6 +10,15 @@ def one_hot(idx, len, device):
     assert type(idx) == int and 0 <= idx < len
     return torch.tensor([[1 if i == idx else 0 for i in range(len)]], device=device, dtype=torch.float)
 
+def reparameterise(x, clamp=(-20, 2)):
+    """
+    The reparameterisation trick. 
+    Construct a Gaussian from x, taken to parameterise the mean and log standard deviation.
+    """
+    mu, log_std = torch.split(x, int(x.shape[1]/2), dim=1)
+    log_std = torch.clamp(log_std, clamp[0], clamp[1])
+    return torch.distributions.Normal(mu, torch.exp(log_std))
+
 def edit_output_size(net, mode:str, A:int, x:int=None, frac:list=None, x0:int=None, x1:int=None):
     """
     Edit the output size of a network by splitting or merging.
@@ -18,7 +26,7 @@ def edit_output_size(net, mode:str, A:int, x:int=None, frac:list=None, x0:int=No
     """
     with torch.no_grad():
         Am, n = net.layers[-1].weight.shape; m = int(Am / A)
-        if mode == "split": assert 0 <= x < m; assert len(frac) > 1; assert np.isclose(sum(frac), 1); m_new = m+len(frac)-1
+        if mode == "split": assert 0 <= x < m; assert len(frac) > 1; assert torch.isclose(sum(frac), 1); m_new = m+len(frac)-1
         elif mode == "merge": assert 0 <= x0 < m-1; assert x0 < x1 < m; m_new = m-(x1-x0) 
 
         d = net.state_dict()
@@ -55,4 +63,4 @@ def edit_output_size(net, mode:str, A:int, x:int=None, frac:list=None, x0:int=No
         #     insert_w = weights[:,x0:x1+1,:].sum(axis=1).reshape(A, 1, n)
         #     insert_b = bias[:,x0:x1+1].sum(axis=1).reshape(A, 1)
         # net.layers[-1].weight = torch.nn.Parameter(torch.cat((weights[:,:x0,:], insert_w, weights[:,x1+1:,:]), dim=1).reshape(A*m_new, n))
-        # net.layers[-1].bias = torch.nn.Parameter(torch.cat((bias[:,:x0], insert_b, bias[:,x1+1:]), dim=1).reshape(A*m_new))
+        # net.layers[-1].bias = torch.nn.Parameter(torch.cat((bias[:,:x0], insert_b, bias[:,x1+1:]), dim=1).reshape(A*m_new))np

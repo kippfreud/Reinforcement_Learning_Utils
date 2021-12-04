@@ -32,6 +32,7 @@ class SacAgent(Agent):
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.   
+        self.total_t = 0 # Used for update_freq.
         self.ep_losses = []  
     
     def act(self, state, explore=True, do_extra=False):
@@ -72,8 +73,10 @@ class SacAgent(Agent):
     def per_timestep(self, state, action, reward, next_state, done):
         """Operations to perform on each timestep during training."""
         self.memory.add(state, action, reward, next_state, done)  
-        losses = self.update_on_batch()
-        if losses: self.ep_losses.append(losses)
+        self.total_t += 1
+        if self.total_t % self.P["update_freq"] == 0:
+            losses = self.update_on_batch()
+            if losses: self.ep_losses.append(losses)
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""

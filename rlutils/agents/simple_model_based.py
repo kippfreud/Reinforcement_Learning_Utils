@@ -22,12 +22,13 @@ class SimpleModelBasedAgent(Agent):
         # Establish whether action space is continuous or discrete.
         self.continuous_actions = len(self.env.action_space.shape) > 0
         # Create model network.
-        if self.P["probabilistic"]: raise NotImplementedError("Requires entropy regularisation")
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
         else: self.state_dim, action_dim = self.env.observation_space.shape[0], (self.env.action_space.shape[0] if self.continuous_actions else 1) 
         self.model = SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim*(2 if self.P["probabilistic"] else 1), lr=self.P["lr_model"]).to(self.device)
         # Create replay memory in two components: one for random transitions one for on-policy transitions.
         self.random_memory = ReplayMemory(self.P["num_random_steps"])
+        # NOTE: Currently MBRL-Lib says fixed bounds "work better" than learnt ones. Using values from there (note std instead of var).
+        if self.P["probabilistic"]: self.log_std_clamp = (None,) # ("soft", -20, 2)
         if not self.P["random_mode_only"]:
             self.memory = ReplayMemory(self.P["replay_capacity"])
             self.batch_split = (round(self.P["batch_size"] * self.P["batch_ratio"]), round(self.P["batch_size"] * (1-self.P["batch_ratio"])))
@@ -49,12 +50,14 @@ class SimpleModelBasedAgent(Agent):
             if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].numpy()
             return action[0].numpy() if self.continuous_actions else action.item(), extra
 
-    def predict(self, states, actions):
+    def predict(self, states, actions, params=False):
         """Use model to predict the next state for an array of state-action pairs."""
-        pred = self.model(col_concat(states, actions.unsqueeze(1) if len(actions.shape) == 1 else actions))
+        ds = self.model(col_concat(states, actions.unsqueeze(1) if len(actions.shape) == 1 else actions))
         # If using a probabilistic dynamics model, simply need to employ the reparameterisation trick.
-        if self.P["probabilistic"]: pred = reparameterise(pred).rsample() 
-        return states + pred
+        if self.P["probabilistic"]: 
+            if params: return reparameterise(ds, clamp=self.log_std_clamp, params=True) # Return mean and log standard deviation.
+            else: ds = reparameterise(ds, clamp=self.log_std_clamp).rsample() 
+        return states + ds
 
     def update_on_batch(self):
         """Use a random batch from the replay memory to update the model network parameters."""
@@ -70,8 +73,15 @@ class SimpleModelBasedAgent(Agent):
             states = torch.cat((states, states_r), dim=0)
             actions = torch.cat((actions, actions_r), dim=0)
             next_states = torch.cat((next_states, next_states_r), dim=0)        
-        # Update model in the direction of the true state derivatives using MSE loss.
-        loss = F.mse_loss(self.predict(states, actions), next_states)
+        if not self.P["probabilistic"]:
+            # Update model in the direction of the true state derivatives using MSE loss.
+            loss = F.mse_loss(self.predict(states, actions), next_states)
+        else:
+            # Update model using Gaussian negative log likelihood loss (see PETS paper equation 1).
+            mu, log_std = self.predict(states, actions, params=True); log_var = 2 * log_std
+            loss = (F.mse_loss(states + mu, next_states, reduction="none") * (-log_var).exp() + log_var).mean() 
+            # TODO: Add a small regularisation penalty to prevent growth of variance range.
+            # loss += 0.01 * (self.max_log_var.sum() - self.min_log_var.sum()) 
         self.model.optimise(loss)
         return loss.item()
 

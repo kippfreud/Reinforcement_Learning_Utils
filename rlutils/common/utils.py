@@ -10,14 +10,19 @@ def one_hot(idx, len, device):
     assert type(idx) == int and 0 <= idx < len
     return torch.tensor([[1 if i == idx else 0 for i in range(len)]], device=device, dtype=torch.float)
 
-def reparameterise(x, clamp=(-20, 2)):
+def reparameterise(x, clamp=("hard", -20, 2), params=False):
     """
     The reparameterisation trick. 
     Construct a Gaussian from x, taken to parameterise the mean and log standard deviation.
     """
     mu, log_std = torch.split(x, int(x.shape[1]/2), dim=1)
-    log_std = torch.clamp(log_std, clamp[0], clamp[1])
-    return torch.distributions.Normal(mu, torch.exp(log_std))
+    # Bounding log_std helps to regulate its behaviour outside the training data (see PETS paper Appendix A.1).
+    if clamp[0] == "hard": # This is used by default for the SAC policy.
+        log_std = torch.clamp(log_std, clamp[1], clamp[2])
+    elif clamp[0] == "soft": # This is used by default for the PETS model.
+        log_std = clamp[1] + torch.nn.functional.softplus(log_std - clamp[1])
+        log_std = clamp[2] - torch.nn.functional.softplus(clamp[2] - log_std)
+    return (mu, log_std) if params else torch.distributions.Normal(mu, torch.exp(log_std))
 
 def edit_output_size(net, mode:str, A:int, x:int=None, frac:list=None, x0:int=None, x1:int=None):
     """

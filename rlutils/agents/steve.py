@@ -28,8 +28,11 @@ class SteveAgent(DdpgAgent):
             if k != "ddpg_parameters": self.P[k] = v
         # Create an ensemble of model networks.
         if len(self.env.observation_space.shape) > 1: raise NotImplementedError()
-        else: self.state_dim, action_dim = self.env.observation_space.shape[0], self.env.action_space.shape[0]        
-        self.models = [SequentialNetwork(code=self.P["net_model"], input_shape=self.state_dim+action_dim, output_size=self.state_dim, lr=self.P["lr_model"]).to(self.device) for _ in range(self.P["num_models"])]
+        else: 
+            self.nonfixed_dim = self.P["nonfixed_dim"] if "nonfixed_dim" in self.P else self.env.observation_space.shape[0] 
+            self.fixed_pad = torch.nn.ZeroPad2d((0, self.env.observation_space.shape[0] - self.nonfixed_dim, 0, 0))
+            action_dim = self.env.action_space.shape[0]        
+        self.models = [SequentialNetwork(code=self.P["net_model"], input_shape=self.nonfixed_dim+action_dim, output_size=self.nonfixed_dim, lr=self.P["lr_model"]).to(self.device) for _ in range(self.P["num_models"])]
         # Parameters for action scaling.
         self.act_k = torch.tensor((self.env.action_space.high - self.env.action_space.low) / 2.)
         self.act_b = torch.tensor((self.env.action_space.high + self.env.action_space.low) / 2.)
@@ -45,14 +48,18 @@ class SteveAgent(DdpgAgent):
         with torch.no_grad():
             extra = {}
             if self.random_mode: action = torch.tensor([self.env.action_space.sample()])
-            else: action, extra = DdpgAgent.act(self, state, explore, do_extra)
-            if do_extra: extra["next_state_pred"] = self.predict(state, action)[0].detach().numpy()
+            else: action, extra = DdpgAgent.act(self, state, explore, do_extra); action = torch.tensor([action])
+            if do_extra: 
+                sim_next_state = self.predict(state, action)
+                extra["sim_next_state"] = sim_next_state[0].numpy()
+                # NOTE: misleading as uses simulated next state rather than true one.
+                # extra["reward_components"] = self.P["reward"](state, self._action_scale(action), sim_next_state)[0] 
             return action[0].numpy(), extra
 
     def predict(self, states, actions, mode="mean"):
         """Use all models to predict the next state for an array of state-action pairs. Return either mean or all."""
-        sa = col_concat(states, actions)
-        ds = torch.cat([model(sa).unsqueeze(2) for model in self.models], dim=2)
+        sa = col_concat(states[:,:self.nonfixed_dim], actions)
+        ds = torch.cat([self.fixed_pad(model(sa)).unsqueeze(2) for model in self.models], dim=2)
         if mode == "mean":  return states + ds.mean(axis=2)
         elif mode == "all": return states + ds
 
@@ -65,8 +72,8 @@ class SteveAgent(DdpgAgent):
                 states, actions, _, _, next_states = self.memory.sample(self.P["batch_size"], keep_terminal_next=True)
                 if states is None: return 
                 # Update model in the direction of the true state derivatives using MSE loss.
-                states_and_actions = col_concat(states, actions)
-                loss = F.mse_loss(model(states_and_actions), next_states - states_and_actions[:,:self.state_dim])
+                states_and_actions = col_concat(states[:,:self.nonfixed_dim], actions)
+                loss = F.mse_loss(model(states_and_actions), next_states[:,:self.nonfixed_dim] - states[:,:self.nonfixed_dim])
                 model.optimise(loss)
                 self.ep_losses_model.append(loss.item()) # Keeping separate prevents confusing the DDPG methods.
         if model_only: return self.ep_losses_model[-1]
@@ -86,17 +93,17 @@ class SteveAgent(DdpgAgent):
                 # Run a forward simulation for each model. 
                 sim_states, sim_actions, sim_returns = next_states, next_actions, 0      
                 for h in range(1, self.P["horizon"]+1): 
-                    # Use reward function to get reward for simulated state-action pair and add to cumulative return.
-                    # sim_rewards = [self.P["reward"](s, self._action_scale(a)) for s, a in zip(sim_states, sim_actions)]
-                    sim_rewards = self.P["reward"](sim_states, self._action_scale(sim_actions))
+                    # Use model and target pi network to get next states and actions.
+                    sim_next_states = sim_states + self.fixed_pad(model(col_concat(sim_states[:,:self.nonfixed_dim], sim_actions))) # Model predicts derivatives.
+                    sim_next_actions = self.pi_target(sim_next_states)
+                    # Use reward function to get reward for simulated state-action-next-state tuple and add to cumulative return.
+                    sim_rewards = self.P["reward"](sim_states, self._action_scale(sim_actions), sim_next_states)
                     assert sim_rewards.shape == (self.P["batch_size"], 1)
                     sim_returns += (self.P["gamma"] ** h) * sim_rewards
-                    # Use model and target pi network to advance states and actions.
-                    sim_states += model(col_concat(sim_states, sim_actions)) # Model predicts derivatives.
-                    sim_actions = self.pi_target(sim_states)
                     # Store Q_targets for this horizon.
                     for j, target_net in enumerate(self.Q_target): 
-                        Q_targets[:,h,i,j] = (sim_returns + ((self.P["gamma"] ** (h+1)) * target_net(col_concat(sim_states, sim_actions)))).squeeze()
+                        Q_targets[:,h,i,j] = (sim_returns + ((self.P["gamma"] ** (h+1)) * target_net(col_concat(sim_next_states, sim_next_actions)))).squeeze()
+                    sim_states, sim_actions = sim_next_states, sim_next_actions
         # Inverse variance weighting of horizons. 
         var = Q_targets.var(dim=(2, 3)) + self.eps # Prevent div/0 error.
         inverse_var = 1 / var

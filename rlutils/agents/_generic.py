@@ -19,3 +19,15 @@ class Agent:
     def per_timestep(self, state, action, reward, next_state, done): pass
 
     def per_episode(self): return {"logs": {}}
+
+    def save(self, path, clear_memory=True): 
+        # Remove env for saving; stops pickle from throwing an error.
+        env = self.env; self.env = None 
+        if clear_memory: 
+            try: memory = self.memory; self.memory = None
+            except: pass # If no memory.
+        torch.save(self, f"{path}.agent")
+        self.env = env
+        if clear_memory: 
+            try: self.memory = memory
+            except: pass

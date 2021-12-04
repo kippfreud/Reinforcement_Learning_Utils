@@ -10,10 +10,11 @@ class ReplayMemory:
     def __init__(self, capacity):
         self.capacity = int(capacity)
         self.element = element
-        self.memory = []
-        self.position = 0
+        self.clear()
 
     def __len__(self): return len(self.memory) # Length is length of memory list.
+
+    def clear(self): self.memory = []; self.position = 0
 
     def add(self, state, action, reward, next_state, done):
         """Save a transition."""

@@ -25,6 +25,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
         else: raise Exception("No observer provided!") 
     else: do_observe = False
     do_checkpoints = "checkpoint_freq" in P and P["checkpoint_freq"] > 0
+    if "custom_loggers" not in P: P["custom_loggers"] = []
     do_reward_decomposition = "reward_components" in agent.P and agent.P["reward_components"] is not None
 
     if do_wandb: 
@@ -103,12 +104,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                                 next_state, done)
 
                 # Update tracking variables.
-                if t == 0: 
-                    # NOTE: Use info for extrinsic, extra for intrinsic.
-                    if ep == 0: track_components = "reward_components" in extra
-                    if track_components: reward_components_sum = np.array(extra["reward_components"])
-                elif track_components:   reward_components_sum += extra["reward_components"]
                 reward_sum += (sum(extra["reward_components"]) if "reward_components" in extra else np.float64(reward).sum()) 
+                for logger in P["custom_loggers"]: logger(t, info, extra)
                 state = next_state; t += 1
                     
             # Perform some agent-specific operations on each episode.
@@ -119,20 +116,29 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             # Add further logs and send to Weights & Biases if applicable.
             results["logs"].update(observer_logs)
             results["logs"]["reward_sum"] = reward_sum
-            if track_components: results["logs"].update({f"reward_{c}": r for c, r in enumerate(reward_components_sum)})
+            for logger in P["custom_loggers"]: results["logs"].update(logger.dict())
+            # if track_components: results["logs"].update({f"reward_{c}": r for c, r in enumerate(reward_components_sum)})
+
             if do_wandb: wandb.log(results["logs"])
 
             # Save current agent model if applicable.
-            if checkpoint_this_ep:
-                env = agent.env
-                agent.env = None # Needed to stop pickle from throwing an error.
-                fname = f"{save_dir}/{run_name}_ep{ep+1}"
-                if type(agent)==StableBaselinesAgent: agent.save(fname) 
-                else: torch.save(agent, f"{fname}.agent")
-                agent.env = env
+            if checkpoint_this_ep: agent.save(f"{save_dir}/{run_name}_ep{ep+1}") 
 
         # Clean up.
         if renderer: renderer.close()
         agent.env.close()
 
     return run_id, run_name # Return run ID and name for reference.
+
+
+# TODO: Move elsewhere.
+class SumLogger:
+    def __init__(self, name, info_or_extra, key): 
+        self.name, self.info_or_extra, self.key = name, info_or_extra, key
+    def __call__(self, t, info, extra):
+        if self.info_or_extra == "info": c = info[self.key]
+        elif self.info_or_extra == "extra": c = extra[self.key]
+        if t == 0: self.sums = np.array(c)
+        else: self.sums += c
+    def dict(self): 
+        return {f"{self.name}_{c}": r for c, r in enumerate(self.sums)}

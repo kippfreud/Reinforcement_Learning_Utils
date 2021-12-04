@@ -97,7 +97,8 @@ default_hyperparameters = {
     "lr_Q": 1e-3, # Learning rate for state-action value function.
     "gamma": 0.99, # Discount factor.
     "alpha": 0.2, # Weighting for entropy regularisation term.
-    "tau": 0.005 # Parameter for Polyak averaging of target network parameters.
+    "tau": 0.005, # Parameter for Polyak averaging of target network parameters.
+    "update_freq": 1, # Number of steps between updates.
   },
 
   "simple_model_based": {  

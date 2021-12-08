@@ -29,6 +29,9 @@ class SacAgent(Agent):
             Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, eval_only=True).to(self.device)
             Q_target.load_state_dict(Q.state_dict()) # Clone.
             self.Q.append(Q); self.Q_target.append(Q_target)
+        self.start()
+
+    def start(self):
         # Create replay memory.
         self.memory = ReplayMemory(self.P["replay_capacity"])
         # Tracking variables.   

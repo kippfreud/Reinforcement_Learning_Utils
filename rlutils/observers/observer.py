@@ -28,7 +28,7 @@ class Observer:
         # List the dimensions in the dataset to be constructed.
         self.dim_names = ["ep", "time"] + state_dims + action_dims + ([f"n_{d}" for d in state_dims] if self.do_next_state else [])
         # Initialise empty dataset.
-        self.data, self.first = [], True
+        self.run_names, self.data, self.first = [], [], True
 
     def observe(self, ep, t, state, action, next_state, reward, done, info, extra):
         """Make an observation of a single timestep."""
@@ -112,4 +112,5 @@ class Observer:
         df.index.name = "step"
         return df
 
-    def save(self, path): self.dataframe().to_csv(path)
+    def save(self): 
+        self.dataframe().to_csv(f"observations/{self.run_names[-1]}.csv")

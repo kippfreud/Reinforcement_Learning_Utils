@@ -69,9 +69,10 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
     else:
         # Iterate through episodes.
         for ep in tqdm(range(P["num_episodes"])):
-            render_this_ep = do_render and ep % P["render_freq"] == 0
-            observe_this_ep = do_observe and ep % P["observe_freq"] == 0
+            render_this_ep = do_render and (ep+1) % P["render_freq"] == 0
+            observe_this_ep = do_observe and (ep+1) % P["observe_freq"] == 0
             checkpoint_this_ep = do_checkpoints and (ep+1) % P["checkpoint_freq"] == 0
+            save_observations_this_ep = do_observe and (ep+1) % P["observation_save_freq"] == 0
             state, reward_sum, t, done = agent.env.reset(), 0, 0, False
             
             # Get state representation.
@@ -121,7 +122,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
 
             if do_wandb: wandb.log(results["logs"])
 
-            # Save current agent model if applicable.
+            # Periodic save-outs of observations and checkpoints.
+            if save_observations_this_ep: observer.save()
             if checkpoint_this_ep: agent.save(f"{save_dir}/{run_name}_ep{ep+1}") 
 
         # Clean up.

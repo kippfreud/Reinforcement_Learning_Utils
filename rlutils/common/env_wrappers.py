@@ -27,12 +27,12 @@ class CustomRewardWrapper(gym.Wrapper):
         - Boolean done flag.
         - Info dictionary. NOTE: Use "reward_components" key to enable wandb monitoring.
     """
-    def __init__(self, env, R=None):
+    def __init__(self, env, reward=None):
         self.env = env
         super().__init__(self.env)
-        if R is not None: self.R = R # This is the reward function.
+        if reward is not None: self.reward = reward # This is the reward function.
 
-    def R(self, state, action, next_state, reward, done, info): 
+    def reward(self, state, action, next_state, reward, done, info): 
         """Default to wiping reward function."""
         return 0., done, {"reward_components": []}
 
@@ -40,7 +40,7 @@ class CustomRewardWrapper(gym.Wrapper):
         
     def step(self, action):
         next_state, reward, done, info = self.env.step(action)
-        reward, done, info_add = self.R(self.state, action, next_state, reward, done, info)
+        reward, done, info_add = self.reward(self.state, action, next_state, reward, done, info)
         self.state = next_state.copy()
         return self.state, reward, done, {**info, **info_add}
 

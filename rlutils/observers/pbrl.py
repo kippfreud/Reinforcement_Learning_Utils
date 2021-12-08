@@ -16,8 +16,8 @@ class DummyKeyEvent:
     def __init__(self, code): self.key = self.mapping[code]
 
 class PbrlObserver:
-    def __init__(self, env, P, dim_names, run_names=[], episodes=[], oracle=None):
-        self.env = env
+    def __init__(self, P, dim_names, run_names=[], episodes=[], oracle=None):
+        # self.env = env
         self.P = P # Dictionary containing hyperparameters.
         self.dim_names = dim_names
         self.run_names = run_names # Can be multiple; order crucial to match with episodes.
@@ -40,7 +40,7 @@ class PbrlObserver:
         # Mean and variance of reward components.  
         self.r, self.var = np.zeros(self.m), np.zeros(self.m) 
         # Overwrite env reward function with the method of this class.
-        self.env.R = self.R
+        # self.env.reward = self.reward
         # History of tree modifications.
         self.history = {}
 
@@ -49,29 +49,32 @@ class PbrlObserver:
     @property
     def m(self): return len(self.tree.leaves)
 
-    def phi(self, sa):
+# ==============================================================================
+# PREDICTION FUNCTIONS
+
+    def phi(self, transition):
         """
-        Map a state-action pair to a behaviour index.
+        Map a transition to a component index.
         """
-        return self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(sa), mode="max"))))
+        return self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(transition), mode="max"))))
 
     def n(self, trajectory):
         """
-        Map a trajectory to a behaviour counts vector.
+        Map a trajectory to a component counts vector.
         """
         n = np.zeros(self.m, dtype=int)
         for x in trajectory: n[self.phi(x[:len(self.dim_names)])] += 1
         return n
 
-    def R(self, state, action, next_state, reward_original, done, _, meanvar=False, stochastic=False):
+    def reward(self, state, action, next_state, reward_original=0, done=False, info={}, meanvar=False, stochastic=False):
         """
-        Reward function, defined over individual state-action pairs. Directly usable in OpenAI Gym.
+        Reward function, defined over individual transitions. Directly usable in OpenAI Gym.
         """
-        x = self.phi(list(state) + list(action))
+        x = self.phi(list(state) + list(action) + list(next_state))
         if meanvar: reward = (self.r[x], self.var[x])
         elif stochastic: reward = np.random.normal(loc=self.r[x], scale=np.sqrt(self.var[x]))   
         else: reward = self.r[x]
-        return reward, done, {"reward_components": [r[xx] if xx==x else 0 for xx, r in enumerate(self.r)], 
+        return reward, done, {"reward_components": [r if xx==x else 0 for xx, r in enumerate(self.r)], 
                               "reward_original": reward_original}
 
     def F(self, trajectory_i, trajectory_j=None):
@@ -80,6 +83,14 @@ class PbrlObserver:
         """
         n = (self.n(trajectory_i) if trajectory_j is None else self.n(trajectory_i)-self.n(trajectory_j))
         return [np.matmul(n, self.r), np.matmul(n, np.matmul(np.diag(self.var), n.T))]
+
+    def F_ucb_for_pairs(self, episodes):
+        """
+        Compute UCB fitness for a list of episodes and sum for all pairs to create a matrix.
+        """
+        mu, var = np.array([self.F(ep) for ep in episodes]).T
+        F_ucb = mu + self.P["ucb_num_std"] * np.sqrt(var)
+        return np.add(F_ucb.reshape(-1,1), F_ucb.reshape(1,-1))
 
     def Pr_pred(self, trajectory_i, trajectory_j): 
         """
@@ -102,19 +113,9 @@ class PbrlObserver:
 
     def observe(self, _, t, state, action, next_state, __, ___, ____, _____):     
         """
-        Store state-action pair for current timestep.
+        Store transition for current timestep.
         """
-        # -----------------------------------------------------------------
-        # NOTE: Extra columns for LunarLander to implement reward function. Very hacky!
-        if "LunarLanderContinuous-v2" in str(self.env):
-            crash, land = int(self.env.game_over), 1-int(self.env.lander.awake)
-            if t == 0: extra = [crash, crash, land, land]
-            else: 
-                extra = [crash, crash if self.episodes[-1][-1][-4] == 0 else 0,
-                         land,  land  if self.episodes[-1][-1][-2] == 0 else 0]
-        else: extra = []
-        # -----------------------------------------------------------------
-        self.episodes[-1].append(list(state.cpu().numpy().flatten()) + list(action) + extra)
+        self.episodes[-1].append(list(state.cpu().numpy().flatten()) + list(action) + list(next_state))
             
     def per_episode(self, _): 
         """
@@ -142,82 +143,54 @@ class PbrlObserver:
         b = self.current_batch_num # Current batch number.
         k_max = (K / B * (1 - c)) + (K * (f * (2*b - 1) - 1) / (B * (B*f - 1)) * c)
         self.get_feedback(k_max=round(k_max))
-        self.abstract(history_key=history_key)
+        self.update(history_key=history_key)
         self._n_on_prev_feedback = len(self.episodes)
 
     def get_feedback(self, k_max=np.inf, ij=None): 
         """
         xxx
         """
-        if "ucb" in self.P["sampling_mode"]: w = self._F_ucb()
+        if "ucb" in self.P["sampling_mode"]: w = self.F_ucb_for_pairs(self.episodes) # Only need to compute once per batch.
         self._k_max = k_max
-        # === Set up display ===   
-        if self.oracle is None:   
-            if False and "HoloNav-v0" in str(self.env): # Deprecated.
-                as_video = False
-                fig, (ax_i, ax_j) = plt.subplots(1, 2)
-                env_ax = self.env.unwrapped.ax
-                self.env.unwrapped.ax = ax_i; self.env.unwrapped.render_map()
-                self.env.unwrapped.ax = ax_j; self.env.unwrapped.render_map()
-                self.env.unwrapped.ax = env_ax
-                fig.canvas.mpl_connect("key_press_event", self._register_feedback)
-                plt.show(block=False)
-            else:
-                as_video = True
-                videos = []
-                for rn in self.run_names:
-                    run_videos = sorted([f"video/{rn}/{f}" for f in os.listdir(f"video/{rn}") if ".mp4" in f])
-                    assert [int(v[-10:-4]) for v in run_videos] == list(range(len(run_videos)))
-                    videos += run_videos
-                if len(videos) != len(self.episodes): assert len(videos) == len(self.episodes) + 1; print("Partial video found; ignoring.")                
-                cv2.startWindowThread()
-                cv2.namedWindow("Trajectory Pairs", cv2.WINDOW_NORMAL)
-                cv2.resizeWindow("Trajectory Pairs", 1000, 500)
         self._k = 1
         self._manual_escape = False
+        if self.oracle is None:   
+            # === Set up video display window ===   
+            videos = []
+            for rn in self.run_names:
+                run_videos = sorted([f"video/{rn}/{f}" for f in os.listdir(f"video/{rn}") if ".mp4" in f])
+                assert [int(v[-10:-4]) for v in run_videos] == list(range(len(run_videos)))
+                videos += run_videos
+            if len(videos) != len(self.episodes): assert len(videos) == len(self.episodes) + 1; print("Partial video found; ignoring.")                
+            cv2.startWindowThread()
+            cv2.namedWindow("Trajectory Pairs", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Trajectory Pairs", 1000, 500)
         while self._k <= self._k_max:
             # === Selection strategy ===
             if ij is None:
                 if self.P["sampling_mode"] == "ucb_constrained":
                     found, self._i, self._j, _ = self._select_i_j_constrained(w, ij_min=self._n_on_prev_feedback)
+                else: raise NotImplementedError()
                 if not found: print("ALL RATED"); break
-            else:
-                self._i, self._j = ij
-            # === Display trajectories ===
+            else: self._i, self._j = ij # Force specified i, j
             if self.oracle is None:
+                # === Display trajectories ===
                 self._valid_input = False
-                if as_video:
-                    vid_i = cv2.VideoCapture(videos[self._i])
-                    vid_j = cv2.VideoCapture(videos[self._j])
-                    while True:
-                        ret, frame1 = vid_i.read()
-                        if not ret: vid_i.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame1 = vid_i.read() # Will get ret = False at the end of the video, so reset.
-                        ret, frame2 = vid_j.read()
-                        if not ret: vid_j.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame2 = vid_j.read()
-                        if frame1 is None or frame2 is None: raise Exception("Video saving not finished!") 
-                        cv2.imshow("Trajectory Pairs", np.concatenate((frame1, frame2), axis=1))
-                        cv2.setWindowProperty("Trajectory Pairs", cv2.WND_PROP_TOPMOST, 1)
-                        key = cv2.waitKey(10) & 0xFF # https://stackoverflow.com/questions/35372700/whats-0xff-for-in-cv2-waitkey1.                        
-                        if key in DummyKeyEvent.mapping:
-                            self._register_feedback(DummyKeyEvent(key))
-                        if self._valid_input: break
-                    vid_i.release(); vid_j.release()
-                else:
-                    x, y = self.episodes[self._i].T 
-                    ax_i.set_title(self._i)
-                    li = ax_i.plot(x, y, alpha=0.3, c="k")
-                    pi1 = ax_i.scatter(x[0], y[0], c="g", zorder=100)
-                    pi2 = ax_i.scatter(x[-1], y[-1], c="r", zorder=100)
-                    x, y = self.episodes[self._j].T 
-                    ax_j.set_title(self._j)
-                    lj = ax_j.plot(x, y, alpha=0.3, c="k")
-                    pj1 = ax_j.scatter(x[0], y[0], c="g", zorder=100)
-                    pj2 = ax_j.scatter(x[-1], y[-1], c="r", zorder=100)
-                    while not self._valid_input: plt.waitforbuttonpress()
-                    li.pop(0).remove(); 
-                    pi1.remove(); pi2.remove()
-                    lj.pop(0).remove(); 
-                    pj1.remove(); pj2.remove()
+                vid_i = cv2.VideoCapture(videos[self._i])
+                vid_j = cv2.VideoCapture(videos[self._j])
+                while True:
+                    ret, frame1 = vid_i.read()
+                    if not ret: vid_i.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame1 = vid_i.read() # Will get ret = False at the end of the video, so reset.
+                    ret, frame2 = vid_j.read()
+                    if not ret: vid_j.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame2 = vid_j.read()
+                    if frame1 is None or frame2 is None: raise Exception("Video saving not finished!") 
+                    cv2.imshow("Trajectory Pairs", np.concatenate((frame1, frame2), axis=1))
+                    cv2.setWindowProperty("Trajectory Pairs", cv2.WND_PROP_TOPMOST, 1)
+                    key = cv2.waitKey(10) & 0xFF # https://stackoverflow.com/questions/35372700/whats-0xff-for-in-cv2-waitkey1.                        
+                    if key in DummyKeyEvent.mapping:
+                        self._register_feedback(DummyKeyEvent(key))
+                    if self._valid_input: break
+                vid_i.release(); vid_j.release()
             else:
                 diff = (self.oracle[self._i] - self.oracle[self._j] if type(self.oracle) == list # Lookup 
                        else self.oracle(self.episodes[self._i], self.episodes[self._j])) # Function
@@ -228,24 +201,9 @@ class PbrlObserver:
         cv2.destroyAllWindows()
         self.current_batch_num += 1 # Batch number.
 
-    def _F_ucb(self):
-
-        """
-        xxx
-        """
-        mu, var = np.array([self.F(ep) for ep in self.episodes]).T
-        F_ucb = mu + self.P["ucb_num_std"] * np.sqrt(var)
-        # mn, mx = scores.min(), scores.max()
-        # if mx == mn: w = np.ones(len(scores))
-        # else: 
-        #     w = self.P["ucb_min_ratio"] + (scores - mn) * ((1 - self.P["ucb_min_ratio"]) / (mx - mn))
-        return np.add(F_ucb.reshape(-1,1), F_ucb.reshape(1,-1))
-        raise Exception("Product fails if feedback_freq=1 and the last episode is rated worst")
-        return np.outer(F_ucb, F_ucb) # Product
-
     def _select_i_j_constrained(self, w, ij_min=0):
         """
-        xxx
+        Sample a trajectory pair from a weighting matrix subject to constraints.
         """
         # Enforce non-repeat constraint...
         n = self.Pr.shape[0]; assert w.shape == (n, n)
@@ -288,13 +246,13 @@ class PbrlObserver:
         else:
             if key == "left": 
                 op = ">"
-                self.Pr[self._i,self._j] = 1 # - self.p_clip
-                self.Pr[self._j,self._i] = 0 # self.p_clip
+                self.Pr[self._i,self._j] = 1
+                self.Pr[self._j,self._i] = 0
                 self._valid_input = True
             elif key == "right":
                 op = "<"
-                self.Pr[self._i,self._j] = 0 # self.p_clip
-                self.Pr[self._j,self._i] = 1 # - self.p_clip
+                self.Pr[self._i,self._j] = 0 
+                self.Pr[self._j,self._i] = 1
                 self._valid_input = True
             elif key == " ":
                 op = "="
@@ -302,39 +260,29 @@ class PbrlObserver:
                 self.Pr[self._j,self._i] = 0.5
                 self._valid_input = True
             if self._valid_input: 
-                # pass
                 print(f"{self._k}/{self._k_max}: {self._i} {op} {self._j}")
 
-    def abstract(self, history_key, reset_tree=False):
+    def update(self, history_key, reset_tree=False):
         """
-        xxx
+        Update the reward function to reflect the current feedback dataset.
+        If reset_tree=True, tree is first pruned back to its root (i.e. start from scratch).
         """
         n = len(self.episodes)
-
         Pr_train, Pr_val = train_val_split(self.Pr)
-        
-        # Compute episode-level fitness estimates and normalise...
+        # Compute episode-level fitness estimates and scale by episode lengths to get reward targets.
         A, d = construct_A_and_d(Pr_train, self.P["p_clip"])
         ep_fitness_cv = fitness_case_v(A, d)
-        if False: #... in [-1, 1].
-            mn, mx = ep_fitness_cv.min(), ep_fitness_cv.max()
-            if mn == mx: assert mn == 0
-            else: reward_target = (2 * ((ep_fitness_cv - mn) / (mx - mn))) - 1
-        if True: # ...by dividing by common episode length T. # NOTE: More stable? 
-            T_all = np.array([len(ep) for ep in self.episodes])
-            T = T_all[0]; assert (T_all == T).all()
-            reward_target = ep_fitness_cv 
-        # Only include episodes that are connected to the training set comparison graph.
+        ep_length = np.array([len(ep) for ep in self.episodes])
+        reward_target = ep_fitness_cv * ep_length.mean() / ep_length
+        # Populate tree with episodes that are connected to the training set comparison graph.
         include = np.invert(np.isnan(Pr_train)).sum(axis=1) > 0 
         print(f"Including {include.sum()} / {n} episodes")
-        # Populate tree.
         self.tree.space.data = np.hstack((
-            np.array([[[i, reward_target[i]]] * T for i in range(n) if include[i]]).reshape(-1,2), # Episode number and reward target.
-            np.vstack([self.episodes[i][:,:len(self.dim_names)] for i in range(n) if include[i]]) # State-action vectors.
+            np.array([[[i, reward_target[i]]] * ep_length[i] for i in range(n) if include[i]]).reshape(-1,2), # Episode number and reward target.
+            np.vstack([self.episodes[i][:,:len(self.dim_names)] for i in range(n) if include[i]])             # Transition vector.
             ))
         if reset_tree: self.tree.prune_to(self.tree.root) # NOTE:
         self.tree.populate()
-
         # Perform best-first splitting until m_max is reached.
         history_split = []        
         with tqdm(total=self.P["m_max"], initial=self.m, desc="Splitting") as pbar:
@@ -364,19 +312,19 @@ class PbrlObserver:
                 assert pruned_nums[-1] == pruned_nums[0] + len(pruned_nums)-1
                 N[:,pruned_nums[0]] = N[:,pruned_nums].sum(axis=1)
                 N = np.delete(N, pruned_nums[1:], axis=1)
-                if False: assert (N == np.array([self.n(ep) for ep in self.episodes])).all() # Sense check.
-        # Now prune only to minimum-loss size.
+                if False: assert (N == np.array([self.n(ep) for ep in self.episodes])).all() # Sense check.     
+        # Now prune to minimum-loss size.
         optimum = np.argmin([l + (self.P["alpha"] * m) for m,_,_,l,_ in history_merge]) # NOTE: Apply size regularisation here.
         self.tree = tree_before_merge # Reset to pre-merging stage.
         for _, parent_num, pruned_nums_prev, _, _ in history_merge[:optimum+1]: 
             if parent_num is None: continue # First entry of history_merge will have this.
             pruned_nums = self.tree.prune_to(self.tree._get_nodes()[parent_num])
             assert set(pruned_nums_prev) == set(pruned_nums)
-        self.r, self.var = np.array(self.tree.gather(("mean","reward"))), np.array(self.tree.gather(("var","reward")))
+        self.r, self.var = np.array(self.tree.gather(("mean","reward"))), np.array(self.tree.gather(("var","reward")))   
         # Store history.
         # history_split, history_merge = split_merge_cancel(history_split, history_merge)
         self.history[history_key] = {"split": history_split, "merge": history_merge}
-
+        # Save out some visualisations.
         print(self.tree.space)
         print(self.tree)
         path = f"run_logs/{self.run_names[-1]}"
@@ -404,7 +352,7 @@ class PbrlObserver:
                     self.show_rectangles(vis_dims, vis_lims)
                     plt.savefig(f"{path}/{vis_dims}_{n}.png")
             if True:
-                _, _, _, p = self._select_i_j_constrained(self._F_ucb(), ij_min=self._n_on_prev_feedback)
+                _, _, _, p = self._select_i_j_constrained(self.F_ucb_for_pairs(self.episodes), ij_min=self._n_on_prev_feedback)
                 plt.figure()
                 plt.imshow(p, interpolation="none")
                 plt.savefig(f"{path}/psi_matrix_{n}.png")
@@ -512,7 +460,7 @@ def construct_A_and_d(Pr, p_clip):
 
 def train_val_split(Pr):
     """
-    xxx, while keeping comparison graph connected.
+    Split rating matrix into training and validation sets, while keeping comparison graph connected for training set.
     """
     # pairs = [(i, j) for i, j in np.argwhere(np.triu(np.invert(np.isnan(Pr))))]
     return Pr, None

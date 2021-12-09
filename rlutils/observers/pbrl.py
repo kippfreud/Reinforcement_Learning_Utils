@@ -16,13 +16,13 @@ class DummyKeyEvent:
     def __init__(self, code): self.key = self.mapping[code]
 
 class PbrlObserver:
-    def __init__(self, P, dim_names, run_names=[], episodes=[], oracle=None):
+    def __init__(self, P, dim_names, run_names=[], episodes=[], interface=None):
         # self.env = env
         self.P = P # Dictionary containing hyperparameters.
         self.dim_names = dim_names
         self.run_names = run_names # Can be multiple; order crucial to match with episodes.
         self.load_episodes(episodes)
-        self.oracle = oracle
+        self.interface = interface
         if "feedback_freq" in P and P["feedback_freq"] > 0:
             # Compute batch size for online.
             b = P["num_episodes_before_freeze"] / P["feedback_freq"]
@@ -108,7 +108,7 @@ class PbrlObserver:
         """
         self.episodes = episodes
         self.Pr = np.full((len(episodes), len(episodes)), np.nan)
-        self._n_on_prev_feedback = 0
+        self.n_on_prev_feedback = 0
         self.current_batch_num = 1
 
     def observe(self, _, t, state, action, next_state, __, ___, ____, _____):     
@@ -144,62 +144,29 @@ class PbrlObserver:
         k_max = (K / B * (1 - c)) + (K * (f * (2*b - 1) - 1) / (B * (B*f - 1)) * c)
         self.get_feedback(k_max=round(k_max))
         self.update(history_key=history_key)
-        self._n_on_prev_feedback = len(self.episodes)
+        self.n_on_prev_feedback = len(self.episodes)
+        self.current_batch_num += 1 
 
-    def get_feedback(self, k_max=np.inf, ij=None): 
+    def get_feedback(self, k_max=1, ij=None): 
         """
         xxx
         """
         if "ucb" in self.P["sampling_mode"]: w = self.F_ucb_for_pairs(self.episodes) # Only need to compute once per batch.
-        self._k_max = k_max
-        self._k = 1
-        self._manual_escape = False
-        if self.oracle is None:   
-            # === Set up video display window ===   
-            videos = []
-            for rn in self.run_names:
-                run_videos = sorted([f"video/{rn}/{f}" for f in os.listdir(f"video/{rn}") if ".mp4" in f])
-                assert [int(v[-10:-4]) for v in run_videos] == list(range(len(run_videos)))
-                videos += run_videos
-            if len(videos) != len(self.episodes): assert len(videos) == len(self.episodes) + 1; print("Partial video found; ignoring.")                
-            cv2.startWindowThread()
-            cv2.namedWindow("Trajectory Pairs", cv2.WINDOW_NORMAL)
-            cv2.resizeWindow("Trajectory Pairs", 1000, 500)
-        while self._k <= self._k_max:
-            # === Selection strategy ===
+        self.interface.open()
+        for k in range(k_max):
             if ij is None:
                 if self.P["sampling_mode"] == "ucb_constrained":
-                    found, self._i, self._j, _ = self._select_i_j_constrained(w, ij_min=self._n_on_prev_feedback)
+                    found, i, j, _ = self._select_i_j_constrained(w, ij_min=self.n_on_prev_feedback)
                 else: raise NotImplementedError()
-                if not found: print("ALL RATED"); break
-            else: self._i, self._j = ij # Force specified i, j
-            if self.oracle is None:
-                # === Display trajectories ===
-                self._valid_input = False
-                vid_i = cv2.VideoCapture(videos[self._i])
-                vid_j = cv2.VideoCapture(videos[self._j])
-                while True:
-                    ret, frame1 = vid_i.read()
-                    if not ret: vid_i.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame1 = vid_i.read() # Will get ret = False at the end of the video, so reset.
-                    ret, frame2 = vid_j.read()
-                    if not ret: vid_j.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame2 = vid_j.read()
-                    if frame1 is None or frame2 is None: raise Exception("Video saving not finished!") 
-                    cv2.imshow("Trajectory Pairs", np.concatenate((frame1, frame2), axis=1))
-                    cv2.setWindowProperty("Trajectory Pairs", cv2.WND_PROP_TOPMOST, 1)
-                    key = cv2.waitKey(10) & 0xFF # https://stackoverflow.com/questions/35372700/whats-0xff-for-in-cv2-waitkey1.                        
-                    if key in DummyKeyEvent.mapping:
-                        self._register_feedback(DummyKeyEvent(key))
-                    if self._valid_input: break
-                vid_i.release(); vid_j.release()
-            else:
-                diff = (self.oracle[self._i] - self.oracle[self._j] if type(self.oracle) == list # Lookup 
-                       else self.oracle(self.episodes[self._i], self.episodes[self._j])) # Function
-                self._register_feedback(DummyKeyEvent(81 if diff > 0 else (83 if diff < 0 else 32)))
-            if self._manual_escape: break
-            self._k += 1
-        plt.close("all")
-        cv2.destroyAllWindows()
-        self.current_batch_num += 1 # Batch number.
+                if not found: print("=== All rated ==="); break
+            else: assert k_max == 1; i, j = ij # Force specified i, j
+            y_ij = self.interface(i, j)
+            if y_ij == "esc": print("=== Feedback exited ==="); break
+            assert 0 <= y_ij <= 1
+            self.Pr[i, j] = y_ij
+            self.Pr[j, i] = 1 - y_ij
+            print(f"{k+1} / {k_max}: P({i} > {j}) = {y_ij}")
+        self.interface.close()
 
     def _select_i_j_constrained(self, w, ij_min=0):
         """
@@ -232,35 +199,6 @@ class PbrlObserver:
         if len(unconnected) < n: assert np.invert(not_rated[i]).sum() > 0 
         assert i >= ij_min or j >= ij_min 
         return True, i, j, p
-
-    def _register_feedback(self, event):
-        """
-        xxx
-        """
-        key = event.key
-        assert np.isnan(self.Pr[self._i,self._j])
-        if key == "escape": 
-            print("Feedback exited")
-            self._valid_input = True
-            self._manual_escape = True
-        else:
-            if key == "left": 
-                op = ">"
-                self.Pr[self._i,self._j] = 1
-                self.Pr[self._j,self._i] = 0
-                self._valid_input = True
-            elif key == "right":
-                op = "<"
-                self.Pr[self._i,self._j] = 0 
-                self.Pr[self._j,self._i] = 1
-                self._valid_input = True
-            elif key == " ":
-                op = "="
-                self.Pr[self._i,self._j] = 0.5
-                self.Pr[self._j,self._i] = 0.5
-                self._valid_input = True
-            if self._valid_input: 
-                print(f"{self._k}/{self._k_max}: {self._i} {op} {self._j}")
 
     def update(self, history_key, reset_tree=False):
         """
@@ -329,7 +267,7 @@ class PbrlObserver:
         print(self.tree)
         path = f"run_logs/{self.run_names[-1]}"
         if not os.path.exists(path): os.makedirs(path)
-        if n % self.P["plot_freq"] == 0:
+        if False and n % self.P["plot_freq"] == 0:
             if True:
                 plt.figure()
                 m_range = [m for m,_,_,_,_ in history_merge]
@@ -352,7 +290,7 @@ class PbrlObserver:
                     self.show_rectangles(vis_dims, vis_lims)
                     plt.savefig(f"{path}/{vis_dims}_{n}.png")
             if True:
-                _, _, _, p = self._select_i_j_constrained(self.F_ucb_for_pairs(self.episodes), ij_min=self._n_on_prev_feedback)
+                _, _, _, p = self._select_i_j_constrained(self.F_ucb_for_pairs(self.episodes), ij_min=self.n_on_prev_feedback)
                 plt.figure()
                 plt.imshow(p, interpolation="none")
                 plt.savefig(f"{path}/psi_matrix_{n}.png")
@@ -360,6 +298,7 @@ class PbrlObserver:
                 hr.diagram(self.tree, pred_dims=["reward"], verbose=True, out_name=f"{path}/diagram_{n}", png=True)
                 
     def save(self): 
+        self.episodes[-1] = np.array(self.episodes[-1])
         path = f"run_logs/{self.run_names[-1]}"
         if not os.path.exists(path): os.makedirs(path)
         dump(self, f"{path}/checkpoint_{len(self.episodes)}.joblib")
@@ -520,3 +459,60 @@ def split_merge_cancel(split, merge):
 # [[None, m, None] for m in merge]
 
 # split_merge_cancel(split, merge)
+
+# ==============================================================================
+# INTERFACES
+
+class Interface:
+    def __init__(self, pbrl): self.pbrl = pbrl
+    def open(self): pass
+    def close(self): pass
+
+class VideoInterface(Interface):
+    def __init__(self, pbrl): 
+        Interface.__init__(self, pbrl)
+        self.mapping = {81: 1., 83: 0., 32: 0.5, 27: "esc"}
+
+    def open(self):
+        self.videos = []
+        for rn in self.pbrl.run_names:
+            run_videos = sorted([f"video/{rn}/{f}" for f in os.listdir(f"video/{rn}") if ".mp4" in f])
+            assert [int(v[-10:-4]) for v in run_videos] == list(range(len(run_videos)))
+            self.videos += run_videos
+        if len(self.videos) != len(self.pbrl.episodes): 
+            assert len(self.videos) == len(self.pbrl.episodes) + 1
+            print("Partial video found; ignoring.")                
+        cv2.startWindowThread()
+        cv2.namedWindow("Trajectory Pairs", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Trajectory Pairs", 1000, 500)
+
+    def close(self): 
+        cv2.destroyAllWindows()
+
+    def __call__(self, i, j):
+        vid_i = cv2.VideoCapture(self.videos[i])
+        vid_j = cv2.VideoCapture(self.videos[j])
+        while True:
+            ret, frame1 = vid_i.read()
+            if not ret: vid_i.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame1 = vid_i.read() # Will get ret = False at the end of the video, so reset.
+            ret, frame2 = vid_j.read()
+            if not ret: vid_j.set(cv2.CAP_PROP_POS_FRAMES, 0); _, frame2 = vid_j.read()
+            if frame1 is None or frame2 is None: raise Exception("Video saving not finished!") 
+            cv2.imshow("Trajectory Pairs", np.concatenate((frame1, frame2), axis=1))
+            cv2.setWindowProperty("Trajectory Pairs", cv2.WND_PROP_TOPMOST, 1)
+            key = cv2.waitKey(10) & 0xFF # https://stackoverflow.com/questions/35372700/whats-0xff-for-in-cv2-waitkey1.                        
+            if key in self.mapping: break
+        vid_i.release(); vid_j.release()
+        return self.mapping[key]
+
+class OracleInterface(Interface):
+    def __init__(self, pbrl, oracle): 
+        Interface.__init__(self, pbrl)
+        self.oracle = oracle
+
+    def __call__(self, i, j): 
+        diff = (self.oracle[i] - self.oracle[j] if type(self.oracle) == list # Lookup 
+                else self.oracle(self.pbrl.episodes[i], self.pbrl.episodes[j])) # Function
+        if diff > 0: return 1. # Positive diff means i preferred.
+        if diff < 1: return 0.
+        return 0.5

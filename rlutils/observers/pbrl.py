@@ -11,9 +11,6 @@ from joblib import dump
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 
-class DummyKeyEvent: 
-    mapping = {81: "left", 83: "right", 32: " ", 27: "escape"}
-    def __init__(self, code): self.key = self.mapping[code]
 
 class PbrlObserver:
     def __init__(self, P, dim_names, run_names=[], episodes=[], interface=None):
@@ -111,7 +108,7 @@ class PbrlObserver:
         self.n_on_prev_feedback = 0
         self.current_batch_num = 1
 
-    def observe(self, _, t, state, action, next_state, __, ___, ____, _____):     
+    def per_timestep(self, _, t, state, action, next_state, __, ___, ____, _____):     
         """
         Store transition for current timestep.
         """
@@ -126,37 +123,34 @@ class PbrlObserver:
             self.episodes[-1] = np.array(self.episodes[-1]) # Convert to NumPy after appending finished.
             if "feedback_freq" in self.P and self.P["feedback_freq"] > 0 and \
                 n <= self.P["num_episodes_before_freeze"] and n % self.P["feedback_freq"] == 0:    
-                self.run(history_key=n-1)
+                # Gather a batch of feedback.
+                K = self.P["feedback_budget"] # Total feedback budget.
+                B = self.num_batches # Number of feedback batches.
+                f = self.P["feedback_freq"] # Number of episodes between feedback batches.
+                c = self.P["scheduling_coef"] # How strongly to apply scheduling.
+                b = self.current_batch_num # Current batch number.
+                k_max = (K / B * (1 - c)) + (K * (f * (2*b - 1) - 1) / (B * (B*f - 1)) * c)
+                self.get_feedback(k_max=round(k_max))
+                # Update reward function.
+                self.update(history_key=(n-1))
+                self.n_on_prev_feedback = n
+                self.current_batch_num += 1 
         # Expand data structures.
         self.episodes.append([])
         Pr_old = self.Pr; self.Pr = np.full((n+1, n+1), np.nan); self.Pr[:-1,:-1] = Pr_old
         return {"feedback_count": self.feedback_count}
-        
-    def run(self, history_key):
-        """
-        xxx
-        """
-        K = self.P["feedback_budget"] # Total feedback budget.
-        B = self.num_batches # Number of feedback batches.
-        f = self.P["feedback_freq"] # Number of episodes between feedback batches.
-        c = self.P["scheduling_coef"] # How strongly to apply scheduling.
-        b = self.current_batch_num # Current batch number.
-        k_max = (K / B * (1 - c)) + (K * (f * (2*b - 1) - 1) / (B * (B*f - 1)) * c)
-        self.get_feedback(k_max=round(k_max))
-        self.update(history_key=history_key)
-        self.n_on_prev_feedback = len(self.episodes)
-        self.current_batch_num += 1 
 
     def get_feedback(self, k_max=1, ij=None): 
         """
         xxx
         """
+        # TODO: Make sampler class in similar way to interface class
         if "ucb" in self.P["sampling_mode"]: w = self.F_ucb_for_pairs(self.episodes) # Only need to compute once per batch.
         self.interface.open()
         for k in range(k_max):
             if ij is None:
                 if self.P["sampling_mode"] == "ucb_constrained":
-                    found, i, j, _ = self._select_i_j_constrained(w, ij_min=self.n_on_prev_feedback)
+                    found, i, j, _ = self.select_i_j_constrained(w, ij_min=self.n_on_prev_feedback)
                 else: raise NotImplementedError()
                 if not found: print("=== All rated ==="); break
             else: assert k_max == 1; i, j = ij # Force specified i, j
@@ -168,14 +162,14 @@ class PbrlObserver:
             print(f"{k+1} / {k_max}: P({i} > {j}) = {y_ij}")
         self.interface.close()
 
-    def _select_i_j_constrained(self, w, ij_min=0):
+    def select_i_j_constrained(self, w, ij_min=0):
         """
         Sample a trajectory pair from a weighting matrix subject to constraints.
         """
         # Enforce non-repeat constraint...
         n = self.Pr.shape[0]; assert w.shape == (n, n)
         not_rated = np.isnan(self.Pr)
-        if not_rated.sum() <= n: return False, None, None, np.zeros_like(w) # If have all possible ratings, no more are possible.
+        if not_rated.sum() <= n: return False, None, None, None # If have all possible ratings, no more are possible.
         p = w.copy()
         rated = np.invert(not_rated)
         p[rated] = np.nan
@@ -290,7 +284,7 @@ class PbrlObserver:
                     self.show_rectangles(vis_dims, vis_lims)
                     plt.savefig(f"{path}/{vis_dims}_{n}.png")
             if True:
-                _, _, _, p = self._select_i_j_constrained(self.F_ucb_for_pairs(self.episodes), ij_min=self.n_on_prev_feedback)
+                _, _, _, p = self.select_i_j_constrained(self.F_ucb_for_pairs(self.episodes), ij_min=self.n_on_prev_feedback)
                 plt.figure()
                 plt.imshow(p, interpolation="none")
                 plt.savefig(f"{path}/psi_matrix_{n}.png")

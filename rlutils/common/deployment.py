@@ -79,8 +79,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
             if renderer: state = renderer.get(first=True)
             else: state = torch.from_numpy(state).float().to(agent.device).unsqueeze(0)
 
-            # NOTE: running observer.per_episode() *before* episode, as needed for PbRL project.
-            observer_logs = observer.per_episode(ep) if observe_this_ep and hasattr(observer, "per_episode") else {}
+            # NOTE: PbRL observer requires per_episode() to be run *before* episode.
+            observer_logs = observer.per_episode(ep) if observe_this_ep else {}
             
             # Iterate through timesteps.
             while not done:
@@ -90,7 +90,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
                 next_state, reward, done, info = agent.env.step(action)
 
                 # Send an observation to the observer if applicable.
-                if observe_this_ep: observer.observe(ep, t, state, action, next_state, reward, done, info, extra)
+                if observe_this_ep: observer.per_timestep(ep, t, state, action, next_state, reward, done, info, extra)
 
                 # Render the environment if applicable.
                 if render_this_ep: agent.env.render()

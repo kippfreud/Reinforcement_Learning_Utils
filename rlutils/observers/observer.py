@@ -30,7 +30,7 @@ class Observer:
         # Initialise empty dataset.
         self.run_names, self.data, self.first = [], [], True
 
-    def observe(self, ep, t, state, action, next_state, reward, done, info, extra):
+    def per_timestep(self, ep, t, state, action, next_state, reward, done, info, extra):
         """Make an observation of a single timestep."""
         if self.first: extra_dim_names = []
         # Basics: state, action, next_state, reward.
@@ -64,6 +64,8 @@ class Observer:
             if illegal: raise ValueError(f"dim_names {illegal} already in use.")
             self.dim_names += extra_dim_names
             self.first = False
+
+    def per_episode(self, ep): pass
 
     def add_future(self, dims, gamma, mode="sum", new_dims=None):
         """

@@ -50,9 +50,10 @@ class PpoAgent(Agent):
             dist = Categorical(action_probs) 
             extra = {"pi": action_probs.cpu().detach().numpy()} if do_extra else {}
         action = dist.sample()
+        if self.continuous_actions: action = torch.clamp(action, -1, 1)
         self.last_action = action
         self.last_log_prob = dist.log_prob(action)
-        return action.item(), extra
+        return action.cpu().detach().numpy()[0] if self.continuous_actions else action.item(), extra
 
     def update_on_experience(self):
         """Use the latest batch of experience to update the policy and value network parameters."""
@@ -84,9 +85,9 @@ class PpoAgent(Agent):
             self.V.optimise(value_loss) 
 
             # Update 
-
+            raise NotImplementedError("Is this implemented?")
             policy_loss = (-torch.min(surr1, surr2) - 0.01*dist_entropy).mean()
-            # self.pi_new.optimise(policy_loss) 
+            self.pi_new.optimise(policy_loss) 
 
         # Copy new weights into policy and clear buffer.
         self.pi.load_state_dict(self.pi_new.state_dict())

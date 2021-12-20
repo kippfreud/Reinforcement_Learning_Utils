@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from gym.spaces.box import Box
 
 
 class SequentialNetwork(nn.Module):
-    def __init__(self, layers=None, code=None, preset=None, input_shape=None, output_size=None,
+    def __init__(self, layers=None, code=None, preset=None, input_shape=None, output_size=None, normaliser=None,
                  eval_only=False, optimiser=optim.Adam, lr=1e-3, clip_grads=False):
         """
         Net codes:
@@ -21,6 +22,7 @@ class SequentialNetwork(nn.Module):
             else:
                 assert preset is not None, "Must specify layers, code or preset."
                 layers = sequential_presets(preset, input_shape, output_size)
+        if normaliser is not None: layers.insert(0, Normalise(normaliser))
         self.layers = nn.Sequential(*layers)
         if eval_only: self.eval()
         else: 
@@ -62,6 +64,21 @@ def code_parser(code, input_shape, output_size):
     return layers
 
 
+class Normalise(nn.Module):
+    def __init__(self, normaliser):
+        super(Normalise, self).__init__()
+        # Normalise into [-1, 1] using limits of observation space.
+        assert type(normaliser) == tuple and all(type(n) == Box for n in normaliser)
+        rnge, shift = [], []
+        for space in normaliser: 
+            r = ((space.high - space.low) / 2.0)
+            rnge += list(r)
+            shift += list(r + space.low)
+        self.range, self.shift = torch.tensor(rnge), torch.tensor(shift)
+
+    def forward(self, x): return (x - self.shift) / self.range
+
+
 # ===================================================================
 # TREE NETWORK
 
@@ -69,6 +86,7 @@ def code_parser(code, input_shape, output_size):
 class TreeNetwork(nn.Module):
     def __init__(self, code_node, code_horizon, input_shape, num_actions,
                  eval_only=False, optimiser=optim.Adam, lr=1e-3):
+        raise NotImplementedError(".forward() method? And normalisation option like SequentialNetwork")
         super(TreeNetwork, self).__init__() 
         assert type(code_node[-1][0]) == int and code_node[-1][1] is None, "Node code have linear final layer."
         # assert code_horizon[-1] == "R", "Horizon code have ReLU final layer."

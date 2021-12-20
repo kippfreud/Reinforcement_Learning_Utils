@@ -20,13 +20,17 @@ class SacAgent(Agent):
         else: obs_shape = self.env.observation_space.shape
         # Create pi and Q networks.
         if len(obs_shape) > 1: raise NotImplementedError()
+        if self.P["input_normaliser"] == "obs_lims": # TODO: Move this into _generic
+            norm_pi = (self.env.observation_space,)
+            norm_Q = (self.env.observation_space, self.env.action_space)
+        else: norm_pi, norm_Q = None, None
         # Policy outputs mean and standard deviation.
-        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=obs_shape[0], output_size=2*self.env.action_space.shape[0], lr=self.P["lr_pi"]).to(self.device)
+        self.pi = SequentialNetwork(code=self.P["net_pi"], input_shape=obs_shape[0], output_size=2*self.env.action_space.shape[0], normaliser=norm_pi, lr=self.P["lr_pi"]).to(self.device)
         self.Q, self.Q_target = [], []
         for _ in range(2): # We have two Q networks, each with their corresponding targets.
             # Action is an *input* to the Q network here.
-            Q = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
-            Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, eval_only=True).to(self.device)
+            Q = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, normaliser=norm_Q, lr=self.P["lr_Q"], clip_grads=True).to(self.device)
+            Q_target = SequentialNetwork(code=self.P["net_Q"], input_shape=obs_shape[0]+self.env.action_space.shape[0], output_size=1, normaliser=norm_Q, eval_only=True).to(self.device)
             Q_target.load_state_dict(Q.state_dict()) # Clone.
             self.Q.append(Q); self.Q_target.append(Q_target)
         self.start()

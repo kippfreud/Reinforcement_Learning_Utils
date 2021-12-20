@@ -65,7 +65,7 @@ class Observer:
             self.dim_names += extra_dim_names
             self.first = False
 
-    def per_episode(self, ep): pass
+    def per_episode(self, ep): return {}
 
     def add_future(self, dims, gamma, mode="sum", new_dims=None):
         """

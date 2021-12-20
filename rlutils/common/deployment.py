@@ -1,13 +1,15 @@
 from ..agents.stable_baselines import StableBaselinesAgent
 
 import torch 
-import gym
 import numpy as np
 from tqdm import tqdm
+from gym import wrappers
 
-
-# TODO: Repeated calls with persistent run_id causes Monitor wrapper to be re-applied! Unwrap on agent.env.close()?
-
+""""
+TODO: Repeated calls with persistent run_id causes Monitor wrapper to be re-applied! Possible solutions:
+- Unwrap on agent.env.close()
+- Never actually wrap agent.env, but create copy in here which does have wrappers
+"""
 
 P_DEFAULT = {"num_episodes": int(1e6), "render_freq": 1}
 
@@ -57,9 +59,9 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
 
     # Add wrappers to environment.
     if "episode_time_limit" in P and P["episode_time_limit"]: # Time limit.
-        agent.env = gym.wrappers.TimeLimit(agent.env, P["episode_time_limit"])
-    if "video_save_freq" in P and P["video_save_freq"] > 0: # Video recording. NOTE: Must put this last.
-        agent.env = gym.wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_save_freq"] == 0, force=True)
+        agent.env = wrappers.TimeLimit(agent.env, P["episode_time_limit"])
+    if "video_freq" in P and P["video_freq"] > 0: # Video recording. NOTE: Must put this last.
+        agent.env = wrappers.Monitor(agent.env, f"./video/{run_name}", video_callable=lambda ep: ep % P["video_freq"] == 0, force=True)
 
     # Create directory for saving.
     if do_observe or do_checkpoints: import os; os.makedirs(save_dir, exist_ok=True)
@@ -71,8 +73,8 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observer=None, run_id
         for ep in tqdm(range(P["num_episodes"])):
             render_this_ep = do_render and (ep+1) % P["render_freq"] == 0
             observe_this_ep = do_observe and (ep+1) % P["observe_freq"] == 0
-            checkpoint_this_ep = do_checkpoints and (ep+1) % P["checkpoint_freq"] == 0
-            save_observations_this_ep = do_observe and (ep+1) % P["observation_save_freq"] == 0
+            checkpoint_this_ep = do_checkpoints and ((ep+1) == P["num_episodes"] or (ep+1) % P["checkpoint_freq"] == 0)
+            save_observations_this_ep = do_observe and ((ep+1) == P["num_episodes"] or (ep+1) % P["observation_save_freq"] == 0)
             state, reward_sum, t, done = agent.env.reset(), 0, 0, False
             
             # Get state representation.

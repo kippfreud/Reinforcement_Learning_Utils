@@ -48,7 +48,7 @@ default_hyperparameters = {
     "epsilon_start": 0.9,
     "epsilon_end": 0.05,
     "epsilon_decay": 500000, # Decay period (timesteps).
-    "target_update": ("soft", 0.0005), # Either ("hard", decay_period) or ("soft", tau).
+    "target_update": ("soft", 0.005), # Either ("hard", decay_period) or ("soft", tau).
     # "target_update": ("hard", 10000),
     "double": True, # Whether to enable double DQN variant to reduce overestimation bias.
     "reward_components": None # For reward decomposition (set to None to disable).

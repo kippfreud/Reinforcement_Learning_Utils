@@ -13,10 +13,11 @@ from matplotlib.colors import Normalize
 
 
 class PbrlObserver:
-    def __init__(self, P, dim_names, run_names=[], episodes=[], interface=None):
+    def __init__(self, P, features, run_names=[], episodes=[], interface=None):
         # self.env = env
         self.P = P # Dictionary containing hyperparameters.
-        self.dim_names = dim_names
+        if type(features) == dict: self.feature_names, self.features = list(features.keys()), features
+        elif type(features) == list: self.feature_names, self.features = features, None
         self.run_names = run_names # Can be multiple; order crucial to match with episodes.
         self.load_episodes(episodes)
         self.interface = interface
@@ -26,12 +27,12 @@ class PbrlObserver:
             assert b % 1 == 0
             self.num_batches = int(b)
         # Initialise empty tree.
-        space = hr.Space(dim_names=["ep", "reward"] + dim_names)
+        space = hr.Space(dim_names=["ep", "reward"] + self.feature_names)
         root = hr.node.Node(space, sorted_indices=space.all_sorted_indices) 
         self.tree = hr.tree.Tree(
             name="reward_model", 
             root=root, 
-            split_dims=space.idxify(dim_names), 
+            split_dims=space.idxify(self.feature_names), 
             eval_dims=space.idxify(["reward"])
             )
         # Mean and variance of reward components.  
@@ -49,25 +50,32 @@ class PbrlObserver:
 # ==============================================================================
 # PREDICTION FUNCTIONS
 
-    def phi(self, transition):
+    def feature_map(self, transitions):
         """
-        Map a transition to a component index.
+        Map an array of transitions to an array of features.
         """
-        return self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(transition), mode="max"))))
+        if len(transitions.shape) == 1: transitions = transitions.reshape(1,-1) # Handle single.
+        return np.hstack([self.features[f](transitions).reshape(-1,1) for f in self.features])
 
-    def n(self, trajectory):
+    def phi(self, features):
         """
-        Map a trajectory to a component counts vector.
+        Map a single feature vector to a component index.
+        """
+        return self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(features[0]), mode="max"))))
+
+    def n(self, transitions):
+        """
+        Map an array of transitions to a component counts vector.
         """
         n = np.zeros(self.m, dtype=int)
-        for x in trajectory: n[self.phi(x[:len(self.dim_names)])] += 1
+        for transition in transitions: n[self.phi(self.feature_map(transition))] += 1
         return n
 
     def reward(self, state, action, next_state, reward_original=0, done=False, info={}, meanvar=False, stochastic=False):
         """
         Reward function, defined over individual transitions. Directly usable in OpenAI Gym.
         """
-        x = self.phi(list(state) + list(action) + list(next_state))
+        x = self.phi(self.feature_map(np.array(list(state) + list(action) + list(next_state))))
         if meanvar: reward = (self.r[x], self.var[x])
         elif stochastic: reward = np.random.normal(loc=self.r[x], scale=np.sqrt(self.var[x]))   
         else: reward = self.r[x]
@@ -201,19 +209,22 @@ class PbrlObserver:
         """
         n = len(self.episodes)
         Pr_train, Pr_val = train_val_split(self.Pr)
-        # Compute episode-level fitness estimates and scale by episode lengths to get reward targets.
-        A, d = construct_A_and_d(Pr_train, self.P["p_clip"])
+        # Compute fitness estimates for episodes that are connected to the training set comparison graph.        
+        A, d, connected = construct_A_and_d(Pr_train, self.P["p_clip"])
+        print(f"Including {len(connected)} / {n} episodes")
         ep_fitness_cv = fitness_case_v(A, d)
-        ep_length = np.array([len(ep) for ep in self.episodes])
-        reward_target = ep_fitness_cv * ep_length.mean() / ep_length
-        # Populate tree with episodes that are connected to the training set comparison graph.
-        include = np.invert(np.isnan(Pr_train)).sum(axis=1) > 0 
-        print(f"Including {include.sum()} / {n} episodes")
+
+        # Uniform temporal prior.
+        # NOTE: scaling by episode lengths (i.e. mean not sum) causes weird behaviour.
+        ep_length = np.array([len(self.episodes[i]) for i in connected])
+        reward_target = ep_fitness_cv #* ep_length.mean() / ep_length 
+        
+        # Populate tree.
         self.tree.space.data = np.hstack((
-            np.array([[[i, reward_target[i]]] * ep_length[i] for i in range(n) if include[i]]).reshape(-1,2), # Episode number and reward target.
-            np.vstack([self.episodes[i][:,:len(self.dim_names)] for i in range(n) if include[i]])             # Transition vector.
+            np.vstack([np.array([[i, r]] * l) for (i, r, l) in zip(connected, reward_target, ep_length)]), # Episode number and reward target.
+            self.feature_map(np.vstack([self.episodes[i] for i in connected]))                             # Feature vector.
             ))
-        if reset_tree: self.tree.prune_to(self.tree.root) # NOTE:
+        if reset_tree: self.tree.prune_to(self.tree.root) 
         self.tree.populate()
         # Perform best-first splitting until m_max is reached.
         history_split = []        
@@ -225,7 +236,7 @@ class PbrlObserver:
                     node, dim, threshold = result
                     history_split.append([self.m, node, dim, threshold, None, sum([q[1] for q in self.tree.split_queue])])        
         # Perform minimal cost complexity pruning until labelling loss is minimised.
-        N = np.array([self.n(ep) for ep in self.episodes])
+        N = np.array([self.n(self.episodes[i]) for i in connected])
         tree_before_merge = self.tree.clone()                
         history_merge, parent_num, pruned_nums = [], None, None
         with tqdm(total=self.P["m_max"], initial=self.m, desc="Merging") as pbar:
@@ -343,13 +354,13 @@ class PbrlObserver:
         """Projected hyperrectangles."""
         ax = hr.show_rectangles(self.tree, vis_dims, attribute=("mean", "reward"), 
             vis_lims=vis_lims, 
-            cmap_lims=[-1, 1], 
-            maximise=False
+            # cmap_lims=[-1, 1],
+            maximise=True
             )
         hr.show_leaf_numbers(self.tree, vis_dims, ax=ax)
-        if False: # Overlay episodes.
-            for i, ep in enumerate(self.episodes): ax.plot(ep[:,vis_dims[0]-2], ep[:,vis_dims[1]-2], alpha=1, label=i)
-            ax.legend()
+        if True: # Overlay episodes.
+            hr.show_samples(self.tree.root, vis_dims=vis_dims, colour_dim="reward", ax=ax)
+        return ax
 
     def show_comparison_graph(self):
         # Graph creation.
@@ -379,17 +390,16 @@ class PbrlObserver:
 # UTILITIES
 
 def construct_A_and_d(Pr, p_clip):
-    n = Pr.shape[0]
-    pairs, y = [], []
-    for j in range(n):
-        for i in range(j): 
-            if not np.isnan(Pr[i, j]): pairs.append([i, j]); y.append(Pr[i, j])
+    pairs, y, connected = [], [], set()
+    for i, j in np.argwhere(np.logical_not(np.isnan(Pr))):
+        if j < i: pairs.append([i, j]); y.append(Pr[i, j]); connected = connected | {i, j}
+    connected = sorted(list(connected))
     # Comparison matrix.
-    A = np.zeros((len(pairs), n), dtype=int)
-    for l, ij in enumerate(pairs): A[l, ij] = [1, -1] 
+    A = np.zeros((len(pairs), len(connected)), dtype=int)
+    for l, (i, j) in enumerate(pairs): A[l, [connected.index(i), connected.index(j)]] = [1, -1] 
     # Target vector.
     d = norm.ppf(np.clip(y, p_clip, 1 - p_clip)) 
-    return A, d
+    return A, d, connected
 
 def train_val_split(Pr):
     """
@@ -400,10 +410,11 @@ def train_val_split(Pr):
 
 def fitness_case_v(A, d):
     """
-    Construct ranking under Thurstone's Case V model. 
+    Construct fitness estimates under Thurstone's Case V model. 
     Uses Morrissey-Gulliksen least squares for incomplete comparison matrix.
     """
-    return np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A)), A.T), d)
+    f = np.matmul(np.matmul(np.linalg.pinv(np.matmul(A.T, A)), A.T), d)
+    return f - f.max() # NOTE: Shift so that maximum fitness is zero (cost function).
 
 def labelling_loss(A, d, N, r, var, p_clip):
     """

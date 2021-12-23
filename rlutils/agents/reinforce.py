@@ -76,4 +76,4 @@ class ReinforceAgent(Agent):
         """Operations to perform on each episode end during training."""
         policy_loss, value_loss = self.update_on_episode() 
         del self.ep_predictions[:]; del self.ep_rewards[:] 
-        return {"logs":{"policy_loss": policy_loss, "value_loss": value_loss}}
+        return {"policy_loss": policy_loss, "value_loss": value_loss}

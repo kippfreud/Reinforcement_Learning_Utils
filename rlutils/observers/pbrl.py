@@ -13,7 +13,7 @@ from matplotlib.colors import Normalize
 
 
 class PbrlObserver:
-    def __init__(self, P, features, run_names=[], episodes=[], interface:tuple=None):
+    def __init__(self, P, features, run_names=[], episodes=[[]], interface:tuple=None):
         self.P = P # Dictionary containing hyperparameters.
         if type(features) == dict: self.feature_names, self.features = list(features.keys()), features
         elif type(features) == list: self.feature_names, self.features = features, None
@@ -127,9 +127,9 @@ class PbrlObserver:
         """
         Store transition for current timestep.
         """
-        self.episodes[-1].append(list(state.cpu().numpy().flatten()) + list(action) + list(next_state))
+        self.episodes[-1].append(list(state) + list(action) + list(next_state))
             
-    def per_episode(self, _): 
+    def per_episode(self, ep): 
         """
         NOTE: To ensure video saving, this is completed *after* env.reset() is called for the next episode.
         """     
@@ -145,11 +145,14 @@ class PbrlObserver:
                 c = self.P["scheduling_coef"] # How strongly to apply scheduling.
                 b = self.current_batch_num # Current batch number.
                 k_max = (K / B * (1 - c)) + (K * (f * (2*b - 1) - 1) / (B * (B*f - 1)) * c)
+                print(k_max)
                 self.get_feedback(k_max=round(k_max))
                 # Update reward function.
                 self.update(history_key=(n-1))
                 self.n_on_prev_feedback = n
                 self.current_batch_num += 1 
+        # Periodically save out.
+        if (ep+1) % self.P["save_freq"] == 0: self.save()
         # Expand data structures.
         self.episodes.append([])
         Pr_old = self.Pr; self.Pr = np.full((n+1, n+1), np.nan); self.Pr[:-1,:-1] = Pr_old
@@ -312,7 +315,7 @@ class PbrlObserver:
             if True:
                 hr.diagram(self.tree, pred_dims=["reward"], verbose=True, out_name=f"{path}/diagram_{n}", png=True)
                 
-    def save(self): 
+    def save(self):
         self.episodes[-1] = np.array(self.episodes[-1])
         path = f"run_logs/{self.run_names[-1]}"
         if not os.path.exists(path): os.makedirs(path)

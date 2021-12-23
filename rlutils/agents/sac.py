@@ -90,4 +90,4 @@ class SacAgent(Agent):
         if self.ep_losses: mean_policy_loss, mean_value_loss = np.nanmean(self.ep_losses, axis=0)
         else: mean_policy_loss, mean_value_loss = 0., 0.
         del self.ep_losses[:]
-        return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss}}
+        return {"policy_loss": mean_policy_loss, "value_loss": mean_value_loss}

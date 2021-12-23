@@ -70,12 +70,12 @@ class DiaynAgent(SacAgent):
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""
-        out = SacAgent.per_episode(self)
-        out["logs"]["discriminator_loss"] = np.mean(self.ep_losses_discriminator) if self.ep_losses_discriminator else 0.
-        out["logs"]["pseudo_reward_sum"] = self.ep_pseudo_reward_sum
+        logs = SacAgent.per_episode(self)
+        logs["discriminator_loss"] = np.mean(self.ep_losses_discriminator) if self.ep_losses_discriminator else 0.
+        logs["pseudo_reward_sum"] = self.ep_pseudo_reward_sum
         del self.ep_losses_discriminator[:]; self.ep_pseudo_reward_sum = 0.
         self.per_episode_deploy()
-        return out
+        return logs
 
     def per_episode_deploy(self):
         self.skill = self._sample_skill() # Resample skill for the next episode.

@@ -102,4 +102,4 @@ class DdpgAgent(Agent):
         else: mean_policy_loss, mean_value_loss = 0., 0.
         del self.ep_losses[:]; self.total_ep += 1
         self.exploration.decay(self.total_ep)
-        return {"logs":{"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.exploration.sigma}}
+        return {"policy_loss": mean_policy_loss, "value_loss": mean_value_loss, "sigma": self.exploration.sigma}

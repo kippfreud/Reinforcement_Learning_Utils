@@ -57,4 +57,4 @@ class ActorCriticAgent(Agent):
         """Operations to perform on each episode end during training."""
         policy_loss, value_loss = np.mean(self.ep_losses, axis=0)
         del self.ep_losses[:]
-        return {"logs":{"policy_loss": policy_loss, "value_loss": value_loss}}
+        return {"policy_loss": policy_loss, "value_loss": value_loss}

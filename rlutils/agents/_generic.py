@@ -17,7 +17,7 @@ class Agent:
 
     def per_timestep(self, state, action, reward, next_state, done): pass
 
-    def per_episode(self): return {"logs": {}}
+    def per_episode(self): return {}
 
     def save(self, path, clear_memory=True): 
         # Remove env for saving; stops pickle from throwing an error.

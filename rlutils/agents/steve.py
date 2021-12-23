@@ -123,12 +123,12 @@ class SteveAgent(DdpgAgent):
 
     def per_episode(self):
         """Operations to perform on each episode end during training."""
-        out = DdpgAgent.per_episode(self)
-        out["logs"]["model_loss"] = np.mean(self.ep_losses_model) if self.ep_losses_model else 0.
-        out["logs"]["model_usage"] = np.mean(self.ep_model_usage) if self.ep_model_usage else 0.
-        out["logs"]["random_mode"] = int(self.random_mode)
+        logs = DdpgAgent.per_episode(self)
+        logs["model_loss"] = np.mean(self.ep_losses_model) if self.ep_losses_model else 0.
+        logs["model_usage"] = np.mean(self.ep_model_usage) if self.ep_model_usage else 0.
+        logs["random_mode"] = int(self.random_mode)
         del self.ep_losses_model[:]; del self.ep_model_usage[:]
-        return out
+        return logs
 
     def _action_scale(self, actions):
         """Rescale actions from [-1,1] to action space extents."""

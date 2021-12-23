@@ -102,7 +102,7 @@ class SimpleModelBasedAgent(Agent):
         if self.ep_losses: mean_loss = np.mean(self.ep_losses)
         else: mean_loss = 0.
         del self.ep_losses[:]
-        return {"logs":{"model_loss": mean_loss, "random_mode": int(self.random_mode)}}
+        return {"model_loss": mean_loss, "random_mode": int(self.random_mode)}
 
     def rollout(self, state): 
         """Use model and reward function to generate and evaluate rollouts with random action selection.

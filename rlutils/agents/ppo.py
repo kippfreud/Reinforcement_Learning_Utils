@@ -119,7 +119,7 @@ class PpoAgent(Agent):
     def per_episode(self):
         """Operations to perform on each episode end during training."""
         policy_loss, value_loss = self.update_on_experience() 
-        return {"logs":{"policy_loss": policy_loss, "value_loss": value_loss}}
+        return {"policy_loss": policy_loss, "value_loss": value_loss}
 
     def _evaluate(self, states, actions):
         if self.continuous_actions:

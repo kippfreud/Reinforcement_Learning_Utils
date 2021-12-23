@@ -37,9 +37,9 @@ class Observer:
         try: action = action.item() # If action is 1D, just extract its item().
         except: pass    
         observation = [ep, t] \
-                    + list(state.cpu().numpy().flatten()) \
+                    + list(state) \
                     + list([action] if self.num_actions == 1 else list(action)) \
-                    + (list(next_state.flatten()) if self.do_next_state else []) # Already in NumPy format.
+                    + (list(next_state) if self.do_next_state else []) # Already in NumPy format.
         if type(reward) == np.ndarray:
             observation += list(reward)
             if self.first: extra_dim_names += [f"reward_{i}" for i in range(len(reward))]   
@@ -65,7 +65,10 @@ class Observer:
             self.dim_names += extra_dim_names
             self.first = False
 
-    def per_episode(self, ep): return {}
+    def per_episode(self, ep): 
+        # Periodically save out.
+        if (ep+1) % self.P["save_freq"] == 0: self.save()
+        return {}
 
     def add_future(self, dims, gamma, mode="sum", new_dims=None):
         """

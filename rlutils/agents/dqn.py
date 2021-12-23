@@ -88,4 +88,4 @@ class DqnAgent(Agent):
         if self.ep_losses: mean_loss = sum(self.ep_losses) / len(self.ep_losses)
         else: mean_loss = 0.
         del self.ep_losses[:]
-        return {"logs":{"value_loss": mean_loss, "epsilon": self.exploration.epsilon}}
+        return {"value_loss": mean_loss, "epsilon": self.exploration.epsilon}

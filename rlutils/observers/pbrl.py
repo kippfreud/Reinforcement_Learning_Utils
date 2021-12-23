@@ -13,14 +13,13 @@ from matplotlib.colors import Normalize
 
 
 class PbrlObserver:
-    def __init__(self, P, features, run_names=[], episodes=[], interface=None):
-        # self.env = env
+    def __init__(self, P, features, run_names=[], episodes=[], interface:tuple=None):
         self.P = P # Dictionary containing hyperparameters.
         if type(features) == dict: self.feature_names, self.features = list(features.keys()), features
         elif type(features) == list: self.feature_names, self.features = features, None
         self.run_names = run_names # Can be multiple; order crucial to match with episodes.
         self.load_episodes(episodes)
-        self.interface = interface
+        if interface is not None: self.interface = interface[0](self, *interface[1:])
         if "feedback_freq" in P and P["feedback_freq"] > 0:
             # Compute batch size for online.
             b = P["num_episodes_before_freeze"] / P["feedback_freq"]
@@ -37,10 +36,17 @@ class PbrlObserver:
             )
         # Mean and variance of reward components.  
         self.r, self.var = np.zeros(self.m), np.zeros(self.m) 
-        # Overwrite env reward function with the method of this class.
-        # self.env.reward = self.reward
         # History of tree modifications.
         self.history = {}
+
+    def link(self, agent):
+        """
+        NOTE: A little inelegant.
+        """
+        assert len(agent.memory) == 0, "Agent must be at the start of learning."
+        agent.P["reward"] = self.reward
+        agent.memory.__init__(agent.memory.capacity, reward=self.reward, relabel_mode="eager")
+        if not agent.memory.lazy_reward: self.relabel_memory = agent.memory.relabel
 
     @property
     def feedback_count(self): return np.triu(np.invert(np.isnan(self.Pr))).sum()
@@ -59,13 +65,13 @@ class PbrlObserver:
 
     def phi(self, features):
         """
-        Map a single feature vector to a component index.
+        Map an array of features to a vector of component indices.
         """
-        return self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(features[0]), mode="max"))))
+        return [self.tree.leaves.index(next(iter(self.tree.propagate([None,None]+list(f), mode="max")))) for f in features]
 
     def n(self, transitions):
         """
-        Map an array of transitions to a component counts vector.
+        Map an array of transitions to a vector of component counts.
         """
         n = np.zeros(self.m, dtype=int)
         for transition in transitions: n[self.phi(self.feature_map(transition))] += 1
@@ -73,14 +79,15 @@ class PbrlObserver:
 
     def reward(self, state, action, next_state, reward_original=0, done=False, info={}, meanvar=False, stochastic=False):
         """
-        Reward function, defined over individual transitions. Directly usable in OpenAI Gym.
+        Reward function, defined over individual transitions. Expects a batch of transitions as PyTorch tensors.
         """
-        x = self.phi(self.feature_map(np.array(list(state) + list(action) + list(next_state))))
+        x = self.phi(self.feature_map(np.hstack([state.numpy(), action.numpy(), next_state.numpy()]))) # NOTE: torch -> numpy slow.
         if meanvar: reward = (self.r[x], self.var[x])
         elif stochastic: reward = np.random.normal(loc=self.r[x], scale=np.sqrt(self.var[x]))   
         else: reward = self.r[x]
-        return reward, done, {"reward_components": [r if xx==x else 0 for xx, r in enumerate(self.r)], 
-                              "reward_original": reward_original}
+        return reward
+        #, done, {"reward_components": [r if xx==x else 0 for xx, r in enumerate(self.r)], 
+        #                      "reward_original": reward_original}
 
     def F(self, trajectory_i, trajectory_j=None):
         """
@@ -116,7 +123,7 @@ class PbrlObserver:
         self.n_on_prev_feedback = 0
         self.current_batch_num = 1
 
-    def per_timestep(self, _, t, state, action, next_state, __, ___, ____, _____):     
+    def per_timestep(self, _, __, state, action, next_state, ___, ____, _____, ______):     
         """
         Store transition for current timestep.
         """
@@ -125,7 +132,7 @@ class PbrlObserver:
     def per_episode(self, _): 
         """
         NOTE: To ensure video saving, this is completed *after* env.reset() is called for the next episode.
-        """            
+        """     
         n = len(self.episodes)
         if n > 0:
             self.episodes[-1] = np.array(self.episodes[-1]) # Convert to NumPy after appending finished.
@@ -202,7 +209,7 @@ class PbrlObserver:
         assert i >= ij_min or j >= ij_min 
         return True, i, j, p
 
-    def update(self, history_key, reset_tree=False):
+    def update(self, history_key, reset_tree=True):
         """
         Update the reward function to reflect the current feedback dataset.
         If reset_tree=True, tree is first pruned back to its root (i.e. start from scratch).
@@ -217,7 +224,7 @@ class PbrlObserver:
         # Uniform temporal prior.
         # NOTE: scaling by episode lengths (i.e. mean not sum) causes weird behaviour.
         ep_length = np.array([len(self.episodes[i]) for i in connected])
-        reward_target = ep_fitness_cv #* ep_length.mean() / ep_length 
+        reward_target = ep_fitness_cv
         
         # Populate tree.
         self.tree.space.data = np.hstack((
@@ -263,13 +270,16 @@ class PbrlObserver:
             if parent_num is None: continue # First entry of history_merge will have this.
             pruned_nums = self.tree.prune_to(self.tree._get_nodes()[parent_num])
             assert set(pruned_nums_prev) == set(pruned_nums)
+        # Store updated result.
         self.r, self.var = np.array(self.tree.gather(("mean","reward"))), np.array(self.tree.gather(("var","reward")))   
+        self.relabel_memory()    
         # Store history.
         # history_split, history_merge = split_merge_cancel(history_split, history_merge)
         self.history[history_key] = {"split": history_split, "merge": history_merge}
         # Save out some visualisations.
         print(self.tree.space)
         print(self.tree)
+        print(hr.rules(self.tree, pred_dims="reward"))
         path = f"run_logs/{self.run_names[-1]}"
         if not os.path.exists(path): os.makedirs(path)
         if False and n % self.P["plot_freq"] == 0:

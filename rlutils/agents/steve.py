@@ -80,7 +80,8 @@ class SteveAgent(DdpgAgent):
         # TODO: Handle termination via nonterminal_mask.
         # Sample another batch, this time for training pi and Q.
         states, actions, rewards, _, next_states = self.memory.sample(self.P["batch_size"], keep_terminal_next=True)
-        rewards = rewards.reshape(-1,1) # NOTE: Sampling rewards shouldn't be necessary if have intrinsic reward function.        
+        raise NotImplementedError("Use intrinsic reward function instead of stored rewards in buffer")
+        rewards = rewards.reshape(-1,1)         
         # Use models to build (hopefully) better Q_targets by simulating forward dynamics.
         Q_targets = torch.zeros((self.P["batch_size"], self.P["horizon"]+1, self.P["num_models"], len(self.Q_target)))
         with torch.no_grad(): 

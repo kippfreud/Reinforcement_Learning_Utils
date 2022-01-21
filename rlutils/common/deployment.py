@@ -94,7 +94,7 @@ def deploy(agent, P=P_DEFAULT, train=False, renderer=None, observers=[], run_id=
 
                 state = next_state; state_torch = next_state_torch; t += 1
             
-            state = agent.env.reset() # NOTE: PbRL observer requires env.reset() here.
+            state = agent.env.reset() # NOTE: PbRL observer requires env.reset() here due to video save behaviour.
                     
             # Perform some agent- and observer-specific operations on each episode, which may create logs.
             logs = {"reward_sum": reward_sum}

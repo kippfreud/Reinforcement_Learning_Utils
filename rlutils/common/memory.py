@@ -11,7 +11,7 @@ element_no_reward = namedtuple('element', ('state', 'action', 'next_state', 'don
 class ReplayMemory:
     def __init__(self, capacity, reward=None, relabel_mode="eager"):
         """
-        If reward is not None, have two options for keeping memory samples up-to-date with the latest reward:
+        If have intrinsic reward (self.reward is not None), have two options for keeping memory samples up-to-date with the latest reward:
         - Eager: Compute reward on *adding* an element to memory, and use the relabel() function to update entire memory when changes made.
         - Lazy: Don't store reward in the memory itself, and compute reward on *sampling* a batch from the memory.
         Which one will be more efficient depends on the memory capacity, batch size, batch sampling frequency and reward update frequency.

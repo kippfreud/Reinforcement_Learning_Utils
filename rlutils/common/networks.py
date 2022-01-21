@@ -76,6 +76,8 @@ class Normalise(nn.Module):
             shift += list(r + space.low)
         self.range, self.shift = torch.tensor(rnge), torch.tensor(shift)
 
+    def __repr__(self): return f"Normalise(range={self.range}, shift={self.shift})"
+
     def forward(self, x): return (x - self.shift) / self.range
 
 

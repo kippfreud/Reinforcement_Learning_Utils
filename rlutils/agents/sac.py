@@ -44,8 +44,9 @@ class SacAgent(Agent):
     
     def act(self, state, explore=True, do_extra=False):
         """Probabilistic action selection from Gaussian parameterised by output of self.pi."""
-        action, log_prob = squashed_gaussian(self.pi(state))
-        return action.cpu().detach().numpy()[0], {}
+        with torch.no_grad():
+            action, log_prob = squashed_gaussian(self.pi(state))
+            return action.cpu().numpy()[0], {}
 
     def update_on_batch(self, diayn_batch=None):
         """Use a random batch from the replay memory to update the pi and Q network parameters."""

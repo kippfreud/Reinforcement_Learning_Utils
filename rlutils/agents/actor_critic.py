@@ -18,9 +18,13 @@ class ActorCriticAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 device=None
                  ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
+        if self.device is None:
+            print("WARNING: Device not specified, defaulting to best available device.")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi and V networks.
@@ -36,11 +40,12 @@ class ActorCriticAgent:
 
     def act(self, state, explore=True):
         """Probabilistic action selection."""
+        state = state.to(self.device)
         action_probs, value = self.pi(state), self.V(state)
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
         self.last_s_l_v = (state, dist.log_prob(action), value[0])
-        return action, {"pi": action_probs.detach().numpy(), "V": value[0].item()}
+        return action, {"pi": action_probs.cpu().detach().numpy(), "V": value[0].item()}
 
     def update_on_transition(self, next_state, reward):
         """Use the latest transition to update the policy and value network parameters."""
@@ -48,7 +53,8 @@ class ActorCriticAgent:
         "Need to store prediction on each timestep. Ensure using agent.act()."        
         state, log_prob, value = self.last_s_l_v
         # Get value prediction for next state.
-        if next_state is not None: next_value = self.V(next_state)[0]
+        if next_state is not None:
+            next_value = self.V(next_state.to(self.device))[0]
         else: next_value = 0 # Handle terminal.
         # Calculate TD target and error.
         td_target = reward + (self.P["gamma"] * next_value)

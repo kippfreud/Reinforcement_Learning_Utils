@@ -3,17 +3,18 @@ import matplotlib.pyplot as plt
 
 
 class Renderer:
-    def __init__(self, env, processor):
+    def __init__(self, env, processor, device):
         self.thread = RenderThread(env)
         self.thread.start()
         self.processor = processor
+        self.device = device
 
     def get_screen(self):
         # Returned screen requested by gym is in (height, width, channel) order.
         # Transpose it into torch order (channel, height, width).
         self.thread.begin_render()
         raw = self.thread.get_screen().transpose((2, 0, 1))
-        return self.processor(raw, self.thread.env)
+        return self.processor(raw, self.thread.env, self.device)
 
     def get_delta(self, last_screen, last_alpha=1):
         current_screen = self.get_screen()

@@ -19,9 +19,13 @@ class ReinforceAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 device=None
                  ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
+        if self.device is None:
+            print("WARNING: Device not specified, defaulting to best available device.")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         self.eps = np.finfo(np.float32).eps.item() # Small float used to prevent div/0 errors.
         # Create pi network (and V if using advantage baselining).
@@ -44,7 +48,7 @@ class ReinforceAgent:
         else: action_probs = self.pi(state)
         dist = Categorical(action_probs) # Categorical action distribution.
         action = dist.sample()
-        extra = {"pi": action_probs.detach().numpy()}
+        extra = {"pi": action_probs.cpu().detach().numpy()}
         if self.V is not None: 
             self.ep_predictions.append((dist.log_prob(action), value[0]))
             extra["V"] = value[0].item()

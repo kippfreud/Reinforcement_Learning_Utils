@@ -3,15 +3,16 @@ import numpy as np
 import torchvision.transforms as T
 import torch
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 # Compose allows common image transforms to be chained together.
 resize = T.Compose([T.ToPILImage(), # Convert a tensor or an ndarray to PIL Image.
                     T.Grayscale(),
                     T.Resize(40, interpolation=Image.CUBIC), # Scale the PIL Image so the shorter side matches the given value.
                     T.ToTensor()]) # Convert back to a tensor.
 
-def screen_processor(screen, env):
+def screen_processor(screen, env, device=None):
+    if device is None:
+        print("WARNING: Device not specified, defaulting to best available device.")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Cart is in the lower half, so strip off the top and bottom of the screen
     _, screen_height, screen_width = screen.shape
     screen = screen[:, int(screen_height*0.4) : int(screen_height*0.8)]
@@ -33,4 +34,4 @@ def screen_processor(screen, env):
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (batch, channel, height, width).
-    return resize(screen).unsqueeze(0).to(DEVICE)
+    return resize(screen).unsqueeze(0).to(device)

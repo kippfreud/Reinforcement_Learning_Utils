@@ -1,11 +1,12 @@
 from rlutils.common.deployment import train
 
 import gym
+import torch
 
 train_parameters = {
     "project_name": "cartpole",
     "env": "CartPole-v1",
-    "model": "reinforce",
+    "model": "actor-critic",
     "num_episodes": 2000,
     "max_timesteps_per_episode": 500,
     "from_pixels": False,
@@ -17,12 +18,15 @@ train_parameters = {
 
 # Make environment.
 env = gym.make(train_parameters["env"]).unwrapped
+# Configure device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 if train_parameters["from_pixels"]:
     # If from_pixels, set up screen processor.
     from rlutils.common.rendering import Renderer
     from rlutils.specific.CartPole import screen_processor # <<< NOTE: HARD CODED FOR CARTPOLE!
     env.reset()
-    renderer = Renderer(env, screen_processor)
+    renderer = Renderer(env, screen_processor, device)
     state_shape = renderer.get_screen().shape
 else: state_shape, renderer = env.observation_space.shape, None
 
@@ -39,7 +43,7 @@ if train_parameters["model"] == "dqn":
         "updates_between_target_clone": 2000
     }
     from rlutils.agents.dqn import *
-    agent = DqnAgent(state_shape, env.action_space.n, agent_parameters)
+    agent = DqnAgent(state_shape, env.action_space.n, agent_parameters, device)
 
 # Make ReinforceAgent.
 elif train_parameters["model"] == "reinforce":
@@ -50,7 +54,7 @@ elif train_parameters["model"] == "reinforce":
         "baseline": "adv"
     }   
     from rlutils.agents.reinforce import *
-    agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters)
+    agent = ReinforceAgent(state_shape, env.action_space.n, agent_parameters, device)
 
 # Make ActorCriticAgent.
 elif train_parameters["model"] == "actor-critic":
@@ -60,6 +64,6 @@ elif train_parameters["model"] == "actor-critic":
         "gamma": 0.99
     }   
     from rlutils.agents.actor_critic import *
-    agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters)
+    agent = ActorCriticAgent(state_shape, env.action_space.n, agent_parameters, device)
 
 run_name = train(agent, env, train_parameters, renderer)

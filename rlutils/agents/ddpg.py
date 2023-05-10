@@ -23,10 +23,14 @@ class DdpgAgent:
     def __init__(self, 
                  state_shape,
                  action_space, 
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 device=None,
                  ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.P = hyperparameters 
+        self.device = device
+        if self.device is None:
+            print("WARNING: Device not specified, defaulting to best available device.")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.P = hyperparameters
         # Create pi and Q networks.
         if len(state_shape) > 1: raise NotImplementedError()
         else: preset_pi, preset_Q = "PendulumPi_Vector", "PendulumQ_Vector"
@@ -52,7 +56,8 @@ class DdpgAgent:
     
     def act(self, state, explore=True):
         """Deterministic action selection plus additive noise."""
-        action = self.pi(state).detach().numpy()[0]
+        state = state.to(self.device)
+        action = self.pi(state).cpu().detach().numpy()[0]
         if explore: return self.noise.get_action(action, self.total_t), {}
         else: return action, {"Qa":None}
 
@@ -61,14 +66,14 @@ class DdpgAgent:
         if len(self.memory) < self.P["batch_size"]: return
         # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-        states = torch.cat(batch.state)
+        states = torch.cat(batch.state).to(self.device)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
         # Compute Q(s, a) by running each concatenated s, a pair through self.Q.
         Q_values = self.Q(self.sa_concat(states, actions)).squeeze()
         # Identify nonterminal states (note that replay memory elements are initialised to None).
         nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
-        nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
+        nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
         # Use target Q network to compute Q_target(s', a') for each nonterminal next state.    
         # a' is chosen using the target pi network.
         next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
@@ -98,7 +103,7 @@ class DdpgAgent:
 
     def sa_concat(_, states, actions):
         """Concatenate states and actions into a single input vector for Q networks."""
-        return torch.cat([states, actions], 1).float()
+        return torch.cat([states, actions.float()], 1).float()
 
     def per_timestep(self, state, action, reward, next_state):
         """Operations to perform on each timestep during training."""

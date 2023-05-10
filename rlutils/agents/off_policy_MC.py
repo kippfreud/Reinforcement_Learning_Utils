@@ -11,7 +11,8 @@ class OffPolicyMCAgent:
     def __init__(self, 
                  state_shape,
                  action_space,
-                 hyperparameters=None
+                 hyperparameters=None,
+                 device=None            # unused param, but included to maintain agent signature
                  ): 
         if hyperparameters is not None:
             self.P = hyperparameters # Store hyperparameter dictionary.

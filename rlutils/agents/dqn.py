@@ -24,9 +24,13 @@ class DqnAgent:
     def __init__(self, 
                  state_shape, 
                  num_actions,
-                 hyperparameters=DEFAULT_HYPERPARAMETERS
+                 hyperparameters=DEFAULT_HYPERPARAMETERS,
+                 device=None
                  ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
+        if self.device is None:
+            print("WARNING: Device not specified, defaulting to best available device.")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.P = hyperparameters 
         # Create Q network.
         if len(state_shape) > 1: preset = "CartPoleQ_Pixels"
@@ -47,8 +51,9 @@ class DqnAgent:
 
     def act(self, state, explore=True):
         """Epsilon-greedy action selection."""
+        state = state.to(self.device)
         Q = self.Q(state)
-        extra = {"Q": Q.detach().numpy()}
+        extra = {"Q": Q.cpu().detach().numpy()}
         if (not explore) or random.random() > self.epsilon:
             # Return action with highest Q value.
             return Q.max(1)[1].view(1, 1), extra
@@ -61,14 +66,14 @@ class DqnAgent:
         if len(self.memory) < self.P["batch_size"]: return 
         # Sample a batch and transpose it (see https://stackoverflow.com/a/19343/3343043).
         batch = self.memory.element(*zip(*self.memory.sample(self.P["batch_size"])))
-        states = torch.cat(batch.state)
+        states = torch.cat(batch.state).to(self.device)
         actions = torch.cat(batch.action)
         rewards = torch.cat(batch.reward)
         # Compute Q(s, a) by running each s through self.Q, then selecting the corresponding column.
         Q_values = self.Q(states).gather(1, actions)
         # Identify nonterminal states (note that replay memory elements are initialised to None).
         nonterminal_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=self.device, dtype=torch.bool)
-        nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None])
+        nonterminal_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
         # Use target network to compute Q_target(s', a') for each nonterminal next state.
         # a' is chosen to be the maximising action from s'.
         next_Q_values = torch.zeros(self.P["batch_size"], device=self.device)
